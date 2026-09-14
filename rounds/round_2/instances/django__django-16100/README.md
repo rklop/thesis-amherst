@@ -1,0 +1,21 @@
+# django__django-16100 — Round 2
+
+## What happened
+
+generated 1 passing candidate from 3 attempts; no usable pair for differentiation; stopped because no additional distinct usable pair could be generated.
+
+## Test bank snapshot
+
+- Before this round: **2** active tests.
+- Added in this round: **0** accepted tests.
+- After this round: **2** active tests.
+
+### Active tests after this round
+
+- [`django__django-16100--170cef54984ee37a`](../../../../test_bank/tests/django__django-16100/django__django-16100--170cef54984ee37a/) — must fail in the recorded way; added in Round 1
+- [`django__django-16100--94a66923f14b8ae0`](../../../../test_bank/tests/django__django-16100/django__django-16100--94a66923f14b8ae0/) — must pass; added in Round 1
+
+## Files in this instance
+
+- [`result.json`](result.json) — A compact machine-readable record for this instance in this round.
+- [`candidate_generation/`](candidate_generation/) — Generated patches, agent trajectories, evaluation reports, and logs.

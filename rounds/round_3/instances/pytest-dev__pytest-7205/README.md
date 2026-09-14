@@ -1,0 +1,21 @@
+# pytest-dev__pytest-7205 — Round 3
+
+## What happened
+
+generated 1 passing candidate from 3 attempts; no usable pair for differentiation; stopped because the retained candidate patches were identical.
+
+## Test bank snapshot
+
+- Before this round: **2** active tests.
+- Added in this round: **0** accepted tests.
+- After this round: **2** active tests.
+
+### Active tests after this round
+
+- [`pytest-dev__pytest-7205--f5e805abf23db4e8`](../../../../test_bank/tests/pytest-dev__pytest-7205/pytest-dev__pytest-7205--f5e805abf23db4e8/) — must pass; added in Round 1
+- [`pytest-dev__pytest-7205--c692fc86e7759cb7`](../../../../test_bank/tests/pytest-dev__pytest-7205/pytest-dev__pytest-7205--c692fc86e7759cb7/) — must pass; added in Round 2
+
+## Files in this instance
+
+- [`result.json`](result.json) — A compact machine-readable record for this instance in this round.
+- [`candidate_generation/`](candidate_generation/) — Generated patches, agent trajectories, evaluation reports, and logs.
