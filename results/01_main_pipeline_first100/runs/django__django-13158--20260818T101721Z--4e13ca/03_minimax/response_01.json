@@ -1,0 +1,42 @@
+{
+  "id": "06d36546fc9d67fca01233482190a88f",
+  "created": 1787048518,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n{\"rating\": \"high_signal\", \"confidence\": 0.9, \"summary\": \"The test correctly identifies that candidate B properly implements the copy isolation invariant for combined querysets, while candidate A fails to deep-copy combined_queries during cloning. Candidate B passes because it clones combined_queries in the clone() method and propagates set_empty() to them, which aligns with QuerySet.all() returning an independent copy. The test reveals a real specification gap: QuerySet documentation implies all() returns a copy, but combined querysets shared mutable branch queries without this fix. Candidate B is more specification-conformant.\", \"specification_signal\": [\"QuerySet.all() documented to return a copy, implying independent mutation\", \"Combined querysets contain mutable branch queries that must be deep-copied for proper isolation\", \"The issue about none() returning all results is addressed by candidate B's set_empty propagation to combined_queries\"], \"oracle_quality\": \"The test directly verifies clone independence by mutating a cloned queryset's branch and checking the original is unaffected. This is a defensible oracle based on the expected semantics of QuerySet.all() returning a copy.\", \"concerns\": [\"The test directly manipulates internal .query.combined_queries, which is implementation-specific\", \"The test doesn't directly test the none() behavior described in the issue - it tests clone isolation which is a related but different property\"], \"human_review_questions\": [\"Is accessing .query.combined_queries directly too implementation-specific for a public API test?\", \"Does the test adequately cover the original issue about none() returning all results, or is clone independence a separate concern?\"]}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this carefully.\n\nThe issue is about `QuerySet.none()` on combined queries (like union) returning all results instead of an empty result.\n\nThe original test patch adds `test_union_none` which tests that `qs3.none()` returns an empty list.\n\nNow let's look at the candidates:\n\n**Candidate A**: Adds a check in the compiler to raise `EmptyResultSet` if the query is empty when using a combinator. This seems to be addressing the issue directly - if `none()` is called, it sets the query as empty, and then this should raise EmptyResultSet.\n\n**Candidate B**: This is more interesting. It:\n1. Adds cloning of combined_queries in the `clone()` method\n2. Modifies `set_empty()` to also set_empty on combined_queries\n\nThe generated test is `test_combined_queryset_clone_independence`. Let me understand what it does:\n- Creates a union queryset [0,1] union [8,9] = [0,1,8,9]\n- Clones it with `.all()`\n- Adds a filter to the first branch of the clone: `clone.query.combined_queries[0].add_q(Q(num=0))`\n- Expects the original to still be [0,1,8,9] and the clone to be [0,8,9]\n\nThe test results:\n- Candidate A: FAIL - the original queryset returns [0,8,9] instead of [0,1,8,9]\n- Candidate B: PASS\n\nThis is interesting. The test is checking that when you clone a combined queryset and modify the clone, the original should not be affected. This is a copy isolation invariant.\n\nCandidate A fails because it doesn't deep-copy the combined_queries when cloning. When the test modifies `clone.query.combined_queries[0]`, it's actually modifying the original queryset's combined_queries because they're shared.\n\n\nCandidate B properly clones the combined_queries, so modifications to the clone don't affect the original. But does this actually fix the original issue about `none()` on combined queries returning all results?\n\nLooking at the patches more carefully:\n- Candidate A's approach is about raising EmptyResultSet when the query is empty during combinator execution\n- Candidate B's approach involves deep cloning combined queries and ensuring set_empty propagates to them\n\nThe test is checking clone isolation, which is a valid specification requirement since QuerySet.all() should return an independent copy. The test passes with Candidate B but fails with Candidate A, revealing that A doesn't properly isolate cloned querysets.\n\nThe original issue describes a form behavior problem where submitting an empty form with a union queryset adds all objects instead of none, which relates to how `none()` should work on combined querysets. However, the test itself focuses on clone independence rather than directly testing `none()` behavior. Candidate B implements both the cloning fix and propagates `set_empty()` to combined queries, which addresses the core issue, while Candidate A only handles the empty result set case without fixing the underlying query isolation problem.\n",
+        "provider_specific_fields": {
+          "audio_content": "",
+          "name": "MiniMax AI"
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 965,
+    "prompt_tokens": 4284,
+    "total_tokens": 5249,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

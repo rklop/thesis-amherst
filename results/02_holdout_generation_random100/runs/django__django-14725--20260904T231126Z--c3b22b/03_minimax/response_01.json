@@ -1,0 +1,42 @@
+{
+  "id": "06ea84caf83a36c7ea72e93c3f333f03",
+  "created": 1788563914,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n{\"rating\": \"high_signal\", \"confidence\": 0.95, \"summary\": \"The test verifies a critical specification requirement: the edit_only feature must prevent new object creation even when users provide custom BaseModelFormSet subclasses via the public formset= extension point. Candidate_a guards only BaseModelFormSet.save_new_objects(), allowing custom overrides to still create objects. Candidate_b correctly handles this by skipping the entire new-object saving phase in save(). The test is minimal, targets externally observable behavior (save() return value and database state), and reveals a real gap in candidate_a's approach that would affect users who customize formset behavior through Django's documented API.\", \"specification_signal\": [\"edit_only must prevent new object creation for custom BaseModelFormSet subclasses supplied via formset= parameter\", \"The feature should work consistently regardless of formset customization patterns\"], \"oracle_quality\": [\"Verifies save() returns empty list when edit_only=True with new form data\", \"Verifies no Author exists in database after save() with edit_only=True\", \"Tests the public customization entry point (formset=) rather than implementation internals\"], \"concerns\": [], \"human_review_questions\": []}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this test case carefully.\n\nThe issue is about providing a way for model formsets to disallow new object creation - an \"edit only\" view.\n\nThe original test patch shows tests for the `edit_only` feature.\n\nCandidate A's patch:\n- Adds `edit_only = False` to `BaseModelFormSet`\n- In `save_new_objects()`, it checks `if self.edit_only` and returns early (empty list)\n- Passes `edit_only` to both `modelformset_factory` and `inlineformset_factory`\n\nCandidate B's patch:\n- Adds `edit_only = False` to `BaseModelFormSet`\n- In the main `save()` method, it checks `if self.edit_only` and only calls `save_existing_objects()`, skipping `save_new_objects()` entirely\n- Passes `edit_only` to both factories\n\nThe generated test proposal tests a specific edge case:\n- A custom `BaseModelFormSet` subclass that overrides `save_new_objects()`\n- With `edit_only=True`, submitting a new form\n- Expected: the formset should be valid, save() returns empty list, and no Author is created\n\nThe validation execution shows:\n- Candidate A: FAILED - returns `[<Author: Ada Lovelace>]` instead of `[]`\n- Candidate B: PASSED - returns `[]` as expected\n\nSo the test reveals that Candidate A's approach is insufficient because it only guards the base class's `save_new_objects()` method, but doesn't prevent custom subclasses from creating new objects. Candidate B's approach is better because it skips the entire new-object saving phase in the `save()` method itself.\n\nNow, let me judge the quality of this test:\n\n1. **Specification Signal**: The test checks whether the `edit_only` option properly prevents new object creation even when using custom formset subclasses. This is a valid specification requirement - the feature should work consistently regardless of how the formset is customized. The issue mentions wanting to \"disallow new object creation\" - this test verifies that guarantee holds.\n\n\n2. **Oracle Quality**: The test verifies two concrete outcomes: that `save()` produces an empty list and that no database records are created. Both assertions directly confirm the edit-only constraint is enforced. The test uses a custom subclass overriding `save_new_objects()` to expose a real vulnerability where Candidate A's approach fails to block object creation through extension points.\n3. **General/Minimal**: The test targets a specific behavioral difference between the two implementations rather than implementation details.\n4. **Signals**: Candidate B demonstrates stronger specification adherence by handling the customization scenario that Candidate A misses. The test is well-designed - it catches a genuine specification gap where the edit-only guarantee must hold even when users supply custom formset classes. This is fundamentally about whether the feature works as intended for Django's public API, not about implementation preferences.\n\nThe test is clear and directly addresses the issue at hand.\n",
+        "provider_specific_fields": {
+          "name": "MiniMax AI",
+          "audio_content": ""
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 843,
+    "prompt_tokens": 3530,
+    "total_tokens": 4373,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

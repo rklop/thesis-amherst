@@ -1,0 +1,27 @@
+diff --git a/tests/constraints/tests.py b/tests/constraints/tests.py
+--- a/tests/constraints/tests.py
++++ b/tests/constraints/tests.py
+@@ -145,6 +145,23 @@ class UniqueConstraintTests(TestCase):
+             "condition=(AND: ('foo', F(bar)))>",
+         )
+ 
++    @skipUnlessDBFeature('supports_partial_indexes')
++    def test_nested_condition_sql_uses_unqualified_columns(self):
++        condition = (
++            models.Q(color='red') |
++            (
++                models.Q(price__gt=models.F('discounted_price')) &
++                (models.Q(name__startswith='A') | models.Q(price__isnull=True))
++            )
++        )
++        constraint = models.UniqueConstraint(
++            fields=['name'], name='nested_condition_uniq', condition=condition,
++        )
++        sql = constraint.create_sql(Product, connection.schema_editor())
++        self.assertIsNotNone(sql)
++        table = connection.ops.quote_name(Product._meta.db_table)
++        self.assertNotIn('%s.' % table, str(sql))
++
+     def test_deconstruction(self):
+         fields = ['foo', 'bar']
+         name = 'unique_fields'

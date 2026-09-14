@@ -1,0 +1,145 @@
+[pipeline] checking candidate patch
+[pipeline] checking generated test patch
+[pipeline] executing generated test command
+<frozen importlib._bootstrap>:228: RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility. Expected 80 from C header, got 96 from PyObject
+Internet access disabled
+[31mF[0m[31m                                                                        [100%][0m
+=================================== FAILURES ===================================
+[31m[1m__________________ test_quantity_ufunc_defers_to_duck_output ___________________[0m
+
+    def test_quantity_ufunc_defers_to_duck_output():
+        class DuckOutput:
+            unit = u.m
+    
+            def __init__(self):
+                self.value = np.empty(2)
+    
+            def __array_ufunc__(self, function, method, *inputs, **kwargs):
+                kwargs["out"] = (self.value,)
+                values = [value.to_value(self.unit) for value in inputs]
+                function(*values, **kwargs)
+                return self
+    
+        output = DuckOutput()
+>       result = np.add(
+            [1.0, 2.0] * u.m,
+            [30.0, 40.0] * u.cm,
+            out=output,
+        )
+
+[1m[31mastropy/units/tests/test_quantity_ufuncs.py[0m:1311: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+[1m[31mastropy/units/quantity.py[0m:653: in __array_ufunc__
+    out_array = check_output(out, unit, inputs, function=function)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+output = <astropy.units.tests.test_quantity_ufuncs.test_quantity_ufunc_defers_to_duck_output.<locals>.DuckOutput object at 0x79c10ce7b5e0>
+unit = Unit("m"), inputs = (<Quantity [1., 2.] m>, <Quantity [30., 40.] cm>)
+function = <ufunc 'add'>
+
+    def check_output(output, unit, inputs, function=None):
+        """Check that function output can be stored in the output array given.
+    
+        Parameters
+        ----------
+        output : array or `~astropy.units.Quantity` or tuple
+            Array that should hold the function output (or tuple of such arrays).
+        unit : `~astropy.units.Unit` or None, or tuple
+            Unit that the output will have, or `None` for pure numbers (should be
+            tuple of same if output is a tuple of outputs).
+        inputs : tuple
+            Any input arguments.  These should be castable to the output.
+        function : callable
+            The function that will be producing the output.  If given, used to
+            give a more informative error message.
+    
+        Returns
+        -------
+        arrays : ndarray view or tuple thereof
+            The view(s) is of ``output``.
+    
+        Raises
+        ------
+        UnitTypeError : If ``unit`` is inconsistent with the class of ``output``
+    
+        TypeError : If the ``inputs`` cannot be cast safely to ``output``.
+        """
+        if isinstance(output, tuple):
+            return tuple(
+                check_output(output_, unit_, inputs, function)
+                for output_, unit_ in zip(output, unit)
+            )
+    
+        # ``None`` indicates no actual array is needed.  This can happen, e.g.,
+        # with np.modf(a, out=(None, b)).
+        if output is None:
+            return None
+    
+        if hasattr(output, "__quantity_subclass__"):
+            # Check that we're not trying to store a plain Numpy array or a
+            # Quantity with an inconsistent unit (e.g., not angular for Angle).
+            if unit is None:
+                raise TypeError(
+                    "Cannot store non-quantity output{} in {} instance".format(
+                        (
+                            f" from {function.__name__} function"
+                            if function is not None
+                            else ""
+                        ),
+                        type(output),
+                    )
+                )
+    
+            q_cls, subok = output.__quantity_subclass__(unit)
+            if not (subok or q_cls is type(output)):
+                raise UnitTypeError(
+                    "Cannot store output with unit '{}'{} "
+                    "in {} instance.  Use {} instance instead.".format(
+                        unit,
+                        (
+                            f" from {function.__name__} function"
+                            if function is not None
+                            else ""
+                        ),
+                        type(output),
+                        q_cls,
+                    )
+                )
+    
+            # check we can handle the dtype (e.g., that we are not int
+            # when float is required).  Note that we only do this for Quantity
+            # output; for array output, we defer to numpy's default handling.
+            # Also, any structured dtype are ignored (likely erfa ufuncs).
+            # TODO: make more logical; is this necessary at all?
+            if inputs and not output.dtype.names:
+                result_type = np.result_type(*inputs)
+                if not (
+                    result_type.names
+                    or np.can_cast(result_type, output.dtype, casting="same_kind")
+                ):
+                    raise TypeError(
+                        "Arguments cannot be cast safely to inplace "
+                        f"output with dtype={output.dtype}"
+                    )
+            # Turn into ndarray, so we do not loop into array_wrap/array_ufunc
+            # if the output is used to store results of a function.
+            return output.view(np.ndarray)
+    
+        else:
+            # output is not a Quantity, so cannot obtain a unit.
+            if not (unit is None or unit is dimensionless_unscaled):
+>               raise UnitTypeError(
+                    "Cannot store quantity with dimension "
+                    "{}in a non-Quantity instance.".format(
+                        f"resulting from {function.__name__} function "
+                        if function is not None
+                        else ""
+                    )
+                )
+[1m[31mE               astropy.units.core.UnitTypeError: Cannot store quantity with dimension resulting from add function in a non-Quantity instance.[0m
+
+[1m[31mastropy/units/quantity_helper/converters.py[0m:384: UnitTypeError
+[36m[1m=========================== short test summary info ============================[0m
+[31mFAILED[0m astropy/units/tests/test_quantity_ufuncs.py::[1mtest_quantity_ufunc_defers_to_duck_output[0m - astropy.units.core.UnitTypeError: Cannot store quantity with dimension resu...
+[31m[31m[1m1 failed[0m[31m in 0.19s[0m[0m
+[pipeline] test_exit_code=1

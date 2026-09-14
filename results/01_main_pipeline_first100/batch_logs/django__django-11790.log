@@ -1,0 +1,69 @@
+
+===== pipeline invocation 1 started 2026-08-18T09:31:37.360046+00:00 =====
+2026-08-18T09:31:37.404792+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-08-18T09:31:37.986382+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-08-18T09:31:38.413055+00:00 [INFO] candidate_a applies cleanly
+2026-08-18T09:31:38.809834+00:00 [INFO] candidate_b applies cleanly
+2026-08-18T09:31:38.809964+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-08-18T09:31:40.278462+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_pipeline_vs_manual_first100_20260818/runs/django__django-11790--20260818T093137Z--12b004/workspace/repo
+2026-08-18T09:31:40.278548+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-08-18T09:31:40.279360+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-08-18T09:31:41.614325+00:00 [INFO] Codex thread started: 01a01436-5a9f-7ff0-b6fb-fda2f5edb664
+2026-08-18T09:33:16.765655+00:00 [INFO] Codex turn completed; usage={'input_tokens': 81257, 'cached_input_tokens': 56320, 'cache_write_input_tokens': 0, 'output_tokens': 4625, 'reasoning_output_tokens': 3422}
+2026-08-18T09:33:17.754904+00:00 [INFO] Codex attempt 1 proposed 'test_username_widget_maxlength_uses_effective_field_max_length' in tests/auth_tests/test_forms.py
+2026-08-18T09:33:18.180104+00:00 [INFO] attempt 1 candidate_a: ran=False passed=False exit=92
+2026-08-18T09:33:18.611719+00:00 [INFO] attempt 1 candidate_b: ran=False passed=False exit=92
+2026-08-18T09:33:18.612879+00:00 [WARN] Codex attempt 1 did not separate; retrying with feedback
+2026-08-18T09:33:18.613671+00:00 [INFO] Launching fresh Codex attempt 2 with model gpt-5.6-sol
+2026-08-18T09:33:20.034687+00:00 [INFO] Codex thread started: 01a01437-db15-7663-966c-eaa940737b4e
+2026-08-18T09:35:46.419117+00:00 [INFO] Codex turn completed; usage={'input_tokens': 265844, 'cached_input_tokens': 240640, 'cache_write_input_tokens': 0, 'output_tokens': 6657, 'reasoning_output_tokens': 4082}
+2026-08-18T09:35:47.401622+00:00 [INFO] Codex attempt 2 proposed 'test_custom_username_field_effective_max_length_in_html' in tests/auth_tests/test_forms.py
+2026-08-18T09:35:48.953260+00:00 [INFO] attempt 2 candidate_a: ran=True passed=True exit=0
+2026-08-18T09:35:50.529927+00:00 [INFO] attempt 2 candidate_b: ran=True passed=False exit=1
+2026-08-18T09:35:50.531064+00:00 [INFO] Validated separation on Codex attempt 2: candidate_a=PASS, candidate_b=FAIL
+2026-08-18T09:35:50.531098+00:00 [STAGE] 5/6 Asking MiniMax to judge specification signal
+2026-08-18T09:35:52.148861+00:00 [INFO] Launching MiniMax judge attempt 1 with model minimax/MiniMax-M2.5
+2026-08-18T09:36:04.087806+00:00 [INFO] MiniMax rating=high_signal confidence=0.95
+2026-08-18T09:36:04.087907+00:00 [STAGE] 6/6 Writing consolidated results
+2026-08-18T09:36:04.344031+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/auth_tests/test_forms.py b/tests/auth_tests/test_forms.py
+--- a/tests/auth_tests/test_forms.py
++++ b/tests/auth_tests/test_forms.py
+@@ -424,6 +424,30 @@ class AuthenticationFormTest(TestDataMixin, TestCase):
+         form = AuthenticationForm(None, data)
+         self.assertEqual(form.fields['username'].max_length, 255)
+         self.assertEqual(form.errors, {})
++
++    def test_custom_username_field_effective_max_length_in_html(self):
++        class CappedCharField(CharField):
++            def __init__(self, *, max_length, **kwargs):
++                self.max_allowed_length = max_length
++                super().__init__(max_length=max_length, **kwargs)
++
++            @property
++            def max_length(self):
++                return self._max_length
++
++            @max_length.setter
++            def max_length(self, value):
++                if value is None:
++                    self._max_length = None
++                else:
++                    self._max_length = min(value, self.max_allowed_length)
++
++        class CustomAuthenticationForm(AuthenticationForm):
++            username = CappedCharField(max_length=32)
++
++        form = CustomAuthenticationForm()
++        self.assertEqual(form.fields['username'].max_length, 32)
++        self.assertIn('maxlength="32"', str(form['username']))
+ 
+     @override_settings(AUTH_USER_MODEL='auth_tests.IntegerUsernameUser')
+     def test_username_field_max_length_defaults_to_254(self):
+===== END DIFFERENTIATING TEST =====
+
+2026-08-18T09:36:04.344210+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_pipeline_vs_manual_first100_20260818/runs/django__django-11790--20260818T093137Z--12b004/SUMMARY.md

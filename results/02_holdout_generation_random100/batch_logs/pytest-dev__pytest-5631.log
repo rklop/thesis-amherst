@@ -1,0 +1,69 @@
+
+===== pipeline invocation 1 started 2026-09-04T22:17:45.334086+00:00 =====
+2026-09-04T22:17:45.379437+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-09-04T22:17:46.017039+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-09-04T22:17:46.419966+00:00 [INFO] candidate_a applies cleanly
+2026-09-04T22:17:46.816833+00:00 [INFO] candidate_b applies cleanly
+2026-09-04T22:17:46.816911+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-09-04T22:17:47.067268+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_gold_pass_current_candidate_fail_random100_20260904/runs/pytest-dev__pytest-5631--20260904T221745Z--4fc3df/workspace/repo
+2026-09-04T22:17:47.067325+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-09-04T22:17:47.067830+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-09-04T22:17:48.535030+00:00 [INFO] Codex thread started: 01a06e7f-dce8-7770-a6d0-91d5323f6a05
+2026-09-04T22:22:23.683502+00:00 [INFO] Codex turn completed; usage={'input_tokens': 287950, 'cached_input_tokens': 262016, 'cache_write_input_tokens': 0, 'output_tokens': 8597, 'reasoning_output_tokens': 6595}
+2026-09-04T22:22:24.755962+00:00 [INFO] Codex attempt 1 proposed 'test_explicit_new_with_uncached_mock_module' in testing/python/integration.py
+2026-09-04T22:22:25.170569+00:00 [INFO] attempt 1 candidate_a: ran=False passed=False exit=92
+2026-09-04T22:22:25.612454+00:00 [INFO] attempt 1 candidate_b: ran=False passed=False exit=92
+2026-09-04T22:22:25.613108+00:00 [WARN] Codex attempt 1 did not meet the acceptance rule; retrying with feedback
+2026-09-04T22:22:25.613523+00:00 [INFO] Launching fresh Codex attempt 2 with model gpt-5.6-sol
+2026-09-04T22:22:27.159639+00:00 [INFO] Codex thread started: 01a06e84-1d4a-71e2-bbde-74dd3817f496
+2026-09-04T22:26:11.912662+00:00 [INFO] Codex turn completed; usage={'input_tokens': 257499, 'cached_input_tokens': 231552, 'cache_write_input_tokens': 0, 'output_tokens': 6947, 'reasoning_output_tokens': 4483}
+2026-09-04T22:26:13.063643+00:00 [INFO] Codex attempt 2 proposed 'test_stdlib_patch_ignores_unrelated_mock_module' in testing/python/test_mock_patch_shadowing.py
+2026-09-04T22:26:14.079904+00:00 [INFO] attempt 2 candidate_a: ran=True passed=False exit=1
+2026-09-04T22:26:15.001932+00:00 [INFO] attempt 2 candidate_b: ran=True passed=True exit=0
+2026-09-04T22:26:15.003349+00:00 [INFO] Validated separation on Codex attempt 2: candidate_a=FAIL, candidate_b=PASS
+2026-09-04T22:26:15.003380+00:00 [STAGE] 5/6 Asking MiniMax to judge specification signal
+2026-09-04T22:26:16.614779+00:00 [INFO] Launching MiniMax judge attempt 1 with model minimax/MiniMax-M2.5
+2026-09-04T22:26:27.739490+00:00 [WARN] MiniMax judge attempt 1 failed: PipelineError: Model response did not contain a JSON object
+2026-09-04T22:26:27.739533+00:00 [INFO] Launching MiniMax judge attempt 2 with model minimax/MiniMax-M2.5
+2026-09-04T22:26:37.761454+00:00 [INFO] MiniMax rating=high_signal confidence=0.95
+2026-09-04T22:26:37.761510+00:00 [STAGE] 6/6 Writing consolidated results
+2026-09-04T22:26:37.785165+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/testing/python/test_mock_patch_shadowing.py b/testing/python/test_mock_patch_shadowing.py
+new file mode 100644
+index 000000000..8d94f1bd1
+--- /dev/null
++++ b/testing/python/test_mock_patch_shadowing.py
+@@ -0,0 +1,26 @@
++def test_stdlib_patch_ignores_unrelated_mock_module(testdir, monkeypatch):
++    testdir.makepyfile(
++        mock="""
++            unrelated = True
++        """,
++        test_uses_stdlib_mock="""
++            import os
++            import mock
++            from unittest.mock import patch
++
++            assert not hasattr(mock, "DEFAULT")
++
++            class Replacement:
++                def __eq__(self, other):
++                    raise AssertionError("replacement equality must not be evaluated")
++
++            replacement = Replacement()
++
++            @patch("os.getcwd", new=replacement)
++            def test_patched():
++                assert os.getcwd is replacement
++        """,
++    )
++    monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
++    result = testdir.runpytest_subprocess()
++    result.assert_outcomes(passed=1)
+===== END DIFFERENTIATING TEST =====
+
+2026-09-04T22:26:37.785314+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_gold_pass_current_candidate_fail_random100_20260904/runs/pytest-dev__pytest-5631--20260904T221745Z--4fc3df/SUMMARY.md

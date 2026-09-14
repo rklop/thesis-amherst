@@ -1,0 +1,67 @@
+
+===== pipeline invocation 1 started 2026-08-18T09:56:21.626057+00:00 =====
+2026-08-18T09:56:21.672595+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-08-18T09:56:22.274745+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-08-18T09:56:22.696494+00:00 [INFO] candidate_a applies cleanly
+2026-08-18T09:56:23.089930+00:00 [INFO] candidate_b applies cleanly
+2026-08-18T09:56:23.090049+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-08-18T09:56:24.449324+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_pipeline_vs_manual_first100_20260818/runs/django__django-12663--20260818T095621Z--5da931/workspace/repo
+2026-08-18T09:56:24.449384+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-08-18T09:56:24.449941+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-08-18T09:56:25.726385+00:00 [INFO] Codex thread started: 01a0144c-ffef-72d3-b2de-a4f68d13dc11
+2026-08-18T09:59:48.953283+00:00 [INFO] Codex turn completed; usage={'input_tokens': 520632, 'cached_input_tokens': 468992, 'cache_write_input_tokens': 0, 'output_tokens': 8985, 'reasoning_output_tokens': 5802}
+2026-08-18T09:59:49.922719+00:00 [INFO] Codex attempt 1 proposed 'test_subquery_annotation_filter_lazy_to_field' in tests/many_to_one/tests.py
+2026-08-18T09:59:51.428951+00:00 [INFO] attempt 1 candidate_a: ran=True passed=False exit=1
+2026-08-18T09:59:52.916327+00:00 [INFO] attempt 1 candidate_b: ran=True passed=True exit=0
+2026-08-18T09:59:52.918400+00:00 [INFO] Validated separation on Codex attempt 1: candidate_a=FAIL, candidate_b=PASS
+2026-08-18T09:59:52.918475+00:00 [STAGE] 5/6 Asking MiniMax to judge specification signal
+2026-08-18T09:59:54.545445+00:00 [INFO] Launching MiniMax judge attempt 1 with model minimax/MiniMax-M2.5
+2026-08-18T10:00:08.580744+00:00 [INFO] MiniMax rating=high_signal confidence=0.95
+2026-08-18T10:00:08.580790+00:00 [STAGE] 6/6 Writing consolidated results
+2026-08-18T10:00:08.822741+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/many_to_one/tests.py b/tests/many_to_one/tests.py
+--- a/tests/many_to_one/tests.py
++++ b/tests/many_to_one/tests.py
+@@ -3,8 +3,10 @@ from copy import deepcopy
+ 
+ from django.core.exceptions import FieldError, MultipleObjectsReturned
+ from django.db import IntegrityError, models, transaction
++from django.db.models import OuterRef, Subquery
+ from django.test import TestCase
++from django.utils.functional import SimpleLazyObject
+ from django.utils.translation import gettext_lazy
+ 
+ from .models import (
+     Article, Category, Child, ChildNullableParent, City, Country, District,
+@@ -561,12 +563,24 @@ class ManyToOneTests(TestCase):
+     def test_save_nullable_fk_after_parent_with_to_field(self):
+         parent = Parent(name='jeff')
+         child = ToFieldChild(parent=parent)
+         parent.save()
+         child.save()
+         child.refresh_from_db()
+         self.assertEqual(child.parent, parent)
+         self.assertEqual(child.parent_id, parent.name)
++
++    def test_subquery_annotation_filter_lazy_to_field(self):
++        parent = Parent.objects.create(pk=7, name='parent-key')
++        child = ToFieldChild.objects.create(parent=parent)
++        lazy_parent = SimpleLazyObject(lambda: parent)
++        selected_parent = Subquery(
++            ToFieldChild.objects.filter(pk=OuterRef('pk')).values('parent'),
++        )
++        match = ToFieldChild.objects.annotate(
++            selected_parent=selected_parent,
++        ).get(selected_parent=lazy_parent)
++        self.assertEqual(match, child)
+ 
+     def test_fk_to_bigautofield(self):
+         ch = City.objects.create(name='Chicago')
+         District.objects.create(city=ch, name='Far South')
+===== END DIFFERENTIATING TEST =====
+
+2026-08-18T10:00:08.822926+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_pipeline_vs_manual_first100_20260818/runs/django__django-12663--20260818T095621Z--5da931/SUMMARY.md

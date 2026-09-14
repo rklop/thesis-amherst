@@ -1,0 +1,10 @@
+{
+  "test_name": "test_cleaned_data_overrides_default_for_omitted_field",
+  "specification_gap": "A ModelForm.clean() override may supply a non-empty cleaned value for a model field omitted from the submitted payload. That cleaned value must override the model field's default.",
+  "input_description": "Bind a ModelForm to an empty data dictionary. The optional mode field is therefore omitted, while clean() assigns cleaned_data['mode'] = 'de'. The model field default is 'di'.",
+  "expected_output": "The form is valid, and save(commit=False) returns an instance whose mode is 'de', not the model default 'di'.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the public ModelForm clean() and save(commit=False) path with a genuinely omitted input key, distinguishing omission in raw form data from a non-empty value deliberately produced during cleaning.",
+  "test_patch": "diff --git a/tests/model_forms/tests.py b/tests/model_forms/tests.py\n--- a/tests/model_forms/tests.py\n+++ b/tests/model_forms/tests.py\n@@ -583,6 +583,23 @@ class ModelFormBaseTest(TestCase):\n         mf2 = PubForm({'mode': ''})\n         self.assertEqual(mf2.errors, {})\n         m2 = mf2.save(commit=False)\n         self.assertEqual(m2.mode, '')\n \n+    def test_cleaned_data_overrides_default_for_omitted_field(self):\n+        class PubForm(forms.ModelForm):\n+            mode = forms.CharField(required=False)\n+\n+            class Meta:\n+                model = PublicationDefaults\n+                fields = ('mode',)\n+\n+            def clean(self):\n+                cleaned_data = super().clean()\n+                cleaned_data['mode'] = 'de'\n+                return cleaned_data\n+\n+        form = PubForm({})\n+        self.assertEqual(form.errors, {})\n+        self.assertEqual(form.save(commit=False).mode, 'de')\n+\n     def test_default_not_populated_on_optional_checkbox_input(self):\n         class PubForm(forms.ModelForm):\n             class Meta:\n",
+  "test_command": "./tests/runtests.py model_forms.tests.ModelFormBaseTest.test_cleaned_data_overrides_default_for_omitted_field"
+}

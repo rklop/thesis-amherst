@@ -1,0 +1,10 @@
+{
+  "test_name": "test_file_extension_validator_message_value",
+  "specification_gap": "FileExtensionValidator must expose the supplied file object as %(value)s, not replace it with the derived value.name. This distinction is hidden for uploaded files whose string representation equals their filename.",
+  "input_description": "Call FileExtensionValidator directly with a ContentFile named document.exe. ContentFile is a supported file value whose public string representation is \"Raw content\", distinct from its filename.",
+  "expected_output": "The raised ValidationError has messages equal to [\"Invalid value: Raw content\"]. Candidate A instead renders \"Invalid value: document.exe\".",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises an alternate public entry point with an established Django file type and verifies the issue's general promise to include the provided value. It avoids inspecting internal params while exposing the candidates' otherwise masked semantic disagreement through normal ValidationError rendering.",
+  "test_patch": "diff --git a/tests/validators/tests.py b/tests/validators/tests.py\n--- a/tests/validators/tests.py\n+++ b/tests/validators/tests.py\n@@ -352,4 +352,11 @@ class TestValidators(SimpleTestCase):\n     def test_max_length_validator_message(self):\n         v = MaxLengthValidator(16, message='\"%(value)s\" has more than %(limit_value)d characters.')\n         with self.assertRaisesMessage(ValidationError, '\"djangoproject.com\" has more than 16 characters.'):\n             v('djangoproject.com')\n+\n+    def test_file_extension_validator_message_value(self):\n+        value = ContentFile('contents', name='document.exe')\n+        validator = FileExtensionValidator(['txt'], message='Invalid value: %(value)s')\n+        with self.assertRaises(ValidationError) as cm:\n+            validator(value)\n+        self.assertEqual(cm.exception.messages, ['Invalid value: Raw content'])\n",
+  "test_command": "python tests/runtests.py validators.tests.TestValidators.test_file_extension_validator_message_value"
+}

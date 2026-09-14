@@ -1,0 +1,42 @@
+{
+  "id": "06d35b7c06766f202e1cbe9a2ab95bb1",
+  "created": 1787046012,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n```json\n{\n  \"rating\": \"high_signal\",\n  \"confidence\": 0.95,\n  \"summary\": \"The test correctly exercises the RFC 7231 specification for RFC 850 two-digit year parsing. It validates that the year calculation must be relative to the current century (not hard-coded to 2000), specifically testing the 50-year boundary at a century rollover (year 2100). Candidate B correctly computes the current century and applies the >50 year rule, while Candidate A incorrectly adds 2000 as a base, failing when the current year is 2100. The test winner (candidate_b) is specification-conformant.\",\n  \"specification_signal\": [\n    \"Test validates RFC 7231 requirement: two-digit years more than 50 years in the future should map to the past\",\n    \"Test explicitly checks the century boundary case (current year 2100) which exposes whether implementation is truly dynamic or hard-coded to 2000s\",\n    \"Tests the exact boundary: year 50 at year 2100 should map to 2150 (exactly 50 years, not more), which is the critical distinction\"\n  ],\n  \"oracle_quality\": [\n    \"The expected behavior is explicitly defined in RFC 7231 quote from the issue\",\n    \"Test uses mock to control current time, allowing deterministic verification of the >50 year rule\",\n    \"The assertion checks the resulting datetime object matches RFC specification\"\n  ],\n  \"concerns\": [],\n  \"human_review_questions\": []\n}\n```",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this test case to determine its quality.\n\nThe issue is about `django.utils.http.parse_http_date` having incorrect logic for two-digit year handling in RFC 850 format. According to RFC 7231, a timestamp that appears to be more than 50 years in the future should be interpreted as representing the most recent year in the past that had the same last two digits.\n\nThe original logic was hard-coded:\n- 0-69 \u2192 2000-2069\n- 70-99 \u2192 1970-1999\n\nThe correct logic should be relative to the current year.\n\nNow let's analyze the generated test:\n\n1. **Test exercises intended public behavior**: Yes - it tests the `parse_http_date` function which is a public utility function in Django for parsing HTTP dates.\n\n2. **Has a defensible oracle**: Yes - the expected behavior is clearly defined in RFC 7231: years more than 50 years in the future should be interpreted as past years. The test checks this specific boundary condition.\n\n3. **Reveals a meaningful missing specification**: The test specifically tests what happens when we cross to a new century (2100), which exposes whether the implementation uses a dynamic current year calculation vs. hard-coded 2000s logic.\n\n4. **Is reasonably general/minimal**: The test is minimal - it tests one specific boundary case (the century boundary with the 50-year rule).\n\nLooking at the candidates:\n\n**Candidate A**: \n```python\nif year < 100:\n    year += 2000\n    current_year = datetime.datetime.utcnow().year\n    if year - current_year > 50:\n        year -= 100\n```\nThis adds 2000 first, then checks if it's more than 50 years in the future. If current year is 2100, year 50 becomes 2050, which is 2050 - 2100 = -50 (not > 50), so it stays 2050. This is wrong because 50 years in the future should still be in the future.\n\n\nThe logic fails when the current year is 2100: a two-digit year of 50 becomes 2050, which is actually 50 years in the past, not the future. Since -50 is not greater than 50, the code incorrectly keeps it at 2050 instead of rolling it back to 2150.\n\n**Candidate B**:\n```python\nif year < 100:\n    current_year = datetime.datetime.utcnow().year\n    current_century = current_year - (current_year % 100)\n    if year - (current_year % 100) > 50:\n```\n\nThe second approach calculates the current century and then determines whether the two-digit year falls more than 50 years ahead. When current_year is 2100, the current century becomes 2100, and year 50 minus 0 equals 50, which is not greater than 50\u2014so it correctly interprets this as 2150.\n\nThe test validates this correctly: at 2100-11-06, the two-digit year 50 should map to 2150 since it's exactly 50 years forward (the boundary case). Any year more than 50 years ahead rolls back, but exactly 50 stays in the future.\n\nThis test effectively exposes Candidate A's fundamental flaw\u2014it hardcodes 2000 as the base year rather than computing dynamically from the current year. Candidate B handles the century rollover properly, so the test correctly identifies it as the winner.\n",
+        "provider_specific_fields": {
+          "name": "MiniMax AI",
+          "audio_content": ""
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 1034,
+    "prompt_tokens": 2698,
+    "total_tokens": 3732,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

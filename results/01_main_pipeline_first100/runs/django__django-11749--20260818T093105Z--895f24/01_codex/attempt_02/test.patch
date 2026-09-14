@@ -1,0 +1,54 @@
+diff --git a/tests/user_commands/tests.py b/tests/user_commands/tests.py
+--- a/tests/user_commands/tests.py
++++ b/tests/user_commands/tests.py
+@@ -1,3 +1,4 @@
++import argparse
+ import os
+ from io import StringIO
+ from unittest import mock
+@@ -206,7 +207,44 @@ class CommandTests(SimpleTestCase):
+         out = StringIO()
+         management.call_command('required_option', '--need-me=foo', needme2='bar', stdout=out)
+         self.assertIn('need_me', out.getvalue())
+         self.assertIn('needme2', out.getvalue())
+ 
++    def test_call_command_required_group_preserves_action_order(self):
++        class RecordingAction(argparse.Action):
++            def __call__(self, parser, namespace, value, option_string=None):
++                trace = getattr(namespace, 'action_trace', ())
++                namespace.action_trace = trace + (self.dest,)
++                setattr(namespace, self.dest, value)
++
++        class Command(BaseCommand):
++            requires_system_checks = False
++
++            def add_arguments(self, parser):
++                group = parser.add_mutually_exclusive_group(required=True)
++                group.add_argument(
++                    '--group-value',
++                    action=RecordingAction,
++                )
++                parser.add_argument(
++                    '--required-value',
++                    action=RecordingAction,
++                    required=True,
++                )
++
++            def handle(self, *args, **options):
++                return ','.join(options['action_trace'])
++
++        command = Command()
++        positional_result = management.call_command(
++            command, '--group-value=group', '--required-value=required',
++            stdout=StringIO(),
++        )
++        keyword_result = management.call_command(
++            command, group_value='group', required_value='required',
++            stdout=StringIO(),
++        )
++        self.assertEqual(keyword_result, positional_result)
++        self.assertEqual(keyword_result, 'group_value,required_value')
++
+     def test_command_add_arguments_after_common_arguments(self):
+         out = StringIO()
+         management.call_command('common_args', stdout=out)

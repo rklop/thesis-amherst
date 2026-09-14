@@ -1,0 +1,90 @@
+[pipeline] checking candidate patch
+[pipeline] checking generated test patch
+[pipeline] executing generated test command
+<frozen importlib._bootstrap>:228: RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility. Expected 80 from C header, got 96 from PyObject
+Internet access disabled
+[31mF[0m[31m                                                                        [100%][0m
+=================================== FAILURES ===================================
+[31m[1m____________ test_subclass_property_preserves_attribute_error_type _____________[0m
+
+    def test_subclass_property_preserves_attribute_error_type():
+        class MissingAttribute(AttributeError):
+            pass
+    
+        class CustomCoord(SkyCoord):
+            @property
+            def prop(self):
+                return self.random_attr
+    
+            def __getattribute__(self, attr):
+                if attr == "random_attr":
+                    raise MissingAttribute(attr)
+                return super().__getattribute__(attr)
+    
+        coord = CustomCoord(1, 2, unit="deg")
+    
+        with pytest.raises(MissingAttribute):
+>           coord.prop
+
+[1m[31mastropy/coordinates/tests/test_sky_coord.py[0m:2187: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+[1m[31mastropy/coordinates/sky_coordinate.py[0m:907: in __getattr__
+    return descriptor.__get__(self, type(self))
+[1m[31mastropy/coordinates/tests/test_sky_coord.py[0m:2177: in prop
+    return self.random_attr
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <CustomCoord (ICRS): (ra, dec) in deg
+    (1., 2.)>, attr = 'random_attr'
+
+    def __getattr__(self, attr):
+        """
+        Overrides getattr to return coordinates that this can be transformed
+        to, based on the alias attr in the primary transform graph.
+        """
+        if "_sky_coord_frame" in self.__dict__:
+            if self._is_name(attr):
+                return self  # Should this be a deepcopy of self?
+    
+            # Anything in the set of all possible frame_attr_names is handled
+            # here. If the attr is relevant for the current frame then delegate
+            # to self.frame otherwise get it from self._<attr>.
+            if attr in frame_transform_graph.frame_attributes:
+                if attr in self.frame.frame_attributes:
+                    return getattr(self.frame, attr)
+                else:
+                    return getattr(self, "_" + attr, None)
+    
+            # Some attributes might not fall in the above category but still
+            # are available through self._sky_coord_frame.
+            if not attr.startswith("_") and hasattr(self._sky_coord_frame, attr):
+                return getattr(self._sky_coord_frame, attr)
+    
+            # Try to interpret as a new frame for transforming.
+            frame_cls = frame_transform_graph.lookup_name(attr)
+            if frame_cls is not None and self.frame.is_transformable_to(frame_cls):
+                return self.transform_to(attr)
+    
+        # Fail
+        # First check if attr is actually a property/descriptor on the class
+        # (e.g., from a subclass). If so, we should not mask the original error.
+        for klass in type(self).__mro__:
+            if attr in klass.__dict__:
+                descriptor = klass.__dict__[attr]
+                if hasattr(descriptor, '__get__'):
+                    # It's a descriptor (e.g., property). Calling it directly
+                    # will re-raise the original AttributeError from within
+                    # the descriptor.
+                    return descriptor.__get__(self, type(self))
+                break
+    
+>       raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{attr}'"
+        )
+[1m[31mE       AttributeError: 'CustomCoord' object has no attribute 'random_attr'[0m
+
+[1m[31mastropy/coordinates/sky_coordinate.py[0m:910: AttributeError
+[36m[1m=========================== short test summary info ============================[0m
+[31mFAILED[0m astropy/coordinates/tests/test_sky_coord.py::[1mtest_subclass_property_preserves_attribute_error_type[0m - AttributeError: 'CustomCoord' object has no attribute 'random_attr'
+[31m[31m[1m1 failed[0m[31m in 0.41s[0m[0m
+[pipeline] test_exit_code=1

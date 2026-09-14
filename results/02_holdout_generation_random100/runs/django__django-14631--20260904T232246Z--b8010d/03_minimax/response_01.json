@@ -1,0 +1,42 @@
+{
+  "id": "06ea86621155823ab04d00257d2b6edd",
+  "created": 1788564322,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n{\"rating\": \"high_signal\", \"confidence\": 0.95, \"summary\": \"The test creates a custom BoundField subclass that transforms submitted data (uppercase) and verifies that both cleaned_data and changed_data respect this transformation. Candidate B passes because it routes all value access through BoundField (using bf.data and bf.initial), while candidate A fails because it bypasses BoundField and extracts widget data directly, resulting in cleaned_data='mixed' instead of 'MIXED'. The test exercises the exact issue requirement (accessing values via BoundField) using the public Field.get_bound_field() API entry point, not implementation internals. The oracle is defensible: it checks that the public BoundField.data property and cleaned_data are consistent, which is the core specification requirement.\", \"specification_signal\": [\"Test uses the public Field.get_bound_field() API customization point to create a custom BoundField\", \"Test directly verifies the issue's core requirement: values should be accessed through BoundField for consistency\", \"Test checks consistency across three externally observable APIs: BoundField.data, cleaned_data, and changed_data\"], \"oracle_quality\": [\"Test verifies that cleaned_data matches what BoundField reports (consistent with BoundField.data property)\", \"Test verifies changed_data is empty because initial='MIXED' matches submitted data after BoundField transformation\", \"The expected behavior (cleaned_data='MIXED', changed_data=[]) follows from the specification that custom BoundFields should be respected by form cleaning and change detection\"], \"concerns\": [], \"human_review_questions\": []}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this carefully.\n\nThe issue is about making `BaseForm._clean_fields()` and `BaseForm.changed_data` access values via BoundField objects for consistency.\n\nThe original test patch adds tests around datetime fields with callable initial values, specifically:\n1. `test_datetime_clean_disabled_callable_initial_microseconds` - tests that cleaning a disabled DateTimeField with callable initial removes microseconds\n2. `test_datetime_clean_disabled_callable_initial_bound_field` - tests that the cleaned value matches the bound field's cached initial value\n\nThe generated test proposal creates a custom BoundField that transforms data (uppercase), and tests that:\n- The BoundField's data property is used for cleaning\n- The BoundField's initial is used for change detection\n\nLet me look at the validated execution:\n- candidate_a fails: cleaned_data is `{'name': 'mixed'}` instead of expected `{'name': 'MIXED'}`\n- candidate_b passes: cleaned_data is `{'name': 'MIXED'}`\n\nThis makes sense because:\n- candidate_a uses `self._field_data_value(field, self.add_prefix(name))` directly, which bypasses the BoundField\n- candidate_b uses `bf.data` and `bf.initial` which go through the BoundField\n\nNow I need to assess the quality of this test:\n\n**specification_signal**: The issue is about accessing values through BoundField for consistency. The test creates a custom BoundField that transforms data and verifies that both `cleaned_data` and `changed_data` use the BoundField. This directly tests the issue's requirement that values should be accessed via BoundField. This is HIGH signal because it exercises the intended behavior.\n\n**oracle_quality**: The test uses a custom BoundField to transform data, and checks that:\n1. `form['name'].data` returns the transformed value (\"MIXED\")\n2. `form.cleaned_data` matches what BoundField reports\n\n\n3. `form.changed_data` is empty (since the initial matches the submitted data after transformation)\n\nThe test verifies the contract that custom BoundFields should be used consistently across all form operations. The key issue is that `candidate_a` bypasses the BoundField's data transformation entirely\u2014it directly extracts raw widget data, ignoring the custom BoundField that should be applied. Meanwhile, `candidate_b` properly routes through the BoundField, ensuring the transformation is applied and `changed_data` correctly reflects no change occurred.\n\nThe test is specific about what constitutes valid behavior\u2014custom BoundFields must be respected\u2014and it doesn't depend on implementation specifics but rather on the public API contract between `BoundField.data` and `cleaned_data`. There's a potential concern about whether changing how data flows through the form could affect other behavior, but the test correctly validates the core requirement. The test is designed well because it uses the public `Field.get_bound_field()` API and checks the observable outcomes that matter: the values in `cleaned_data` and `changed_data`.\n",
+        "provider_specific_fields": {
+          "audio_content": "",
+          "name": "MiniMax AI"
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 930,
+    "prompt_tokens": 3672,
+    "total_tokens": 4602,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

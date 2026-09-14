@@ -1,0 +1,41 @@
+diff --git a/tests/messages_tests/tests.py b/tests/messages_tests/tests.py
+--- a/tests/messages_tests/tests.py
++++ b/tests/messages_tests/tests.py
+@@ -1,4 +1,7 @@
++import os
++import subprocess
++import sys
+ from unittest import mock
+ 
+ from django.contrib.messages import constants
+ from django.contrib.messages.storage.base import Message
+@@ -13,5 +16,30 @@ class MessageTests(SimpleTestCase):
+         self.assertEqual(msg_1, mock.ANY)
+         self.assertNotEqual(msg_1, msg_2)
+         self.assertNotEqual(msg_1, msg_3)
+         self.assertNotEqual(msg_2, msg_3)
++
++    def test_setting_changed_receiver_is_app_scoped(self):
++        env = os.environ.copy()
++        env.pop('DJANGO_SETTINGS_MODULE', None)
++        script = """
++from django.conf import settings
++
++settings.configure(INSTALLED_APPS=[], MESSAGE_TAGS={})
++import django
++django.setup()
++
++from django.contrib.messages import constants
++from django.contrib.messages.storage.base import Message
++from django.test import override_settings
++
++print(Message(constants.INFO, 'before').level_tag)
++with override_settings(MESSAGE_TAGS={constants.INFO: 'custom'}):
++    print(Message(constants.INFO, 'during').level_tag)
++"""
++        output = subprocess.check_output(
++            [sys.executable, '-c', script],
++            env=env,
++            text=True,
++        )
++        self.assertEqual(output.splitlines(), ['info', 'info'])

@@ -1,0 +1,28 @@
+diff --git a/tests/migrations/test_writer.py b/tests/migrations/test_writer.py
+--- a/tests/migrations/test_writer.py
++++ b/tests/migrations/test_writer.py
+@@ -1,3 +1,4 @@
++import builtins
+ import datetime
+ import decimal
+ import enum
+@@ -266,8 +267,18 @@ class WriterTests(SimpleTestCase):
+     def test_serialize_builtin_types(self):
+         self.assertSerializedEqual([list, tuple, dict, set, frozenset])
+         self.assertSerializedResultEqual(
+             [list, tuple, dict, set, frozenset],
+             ("[list, tuple, dict, set, frozenset]", set())
+         )
+ 
++    def test_serialize_nested_builtin_type(self):
++        class MigrationTypes:
++            class Nested:
++                pass
++
++        MigrationTypes.Nested.__module__ = builtins.__name__
++        MigrationTypes.Nested.__qualname__ = 'MigrationTypes.Nested'
++        with mock.patch.object(builtins, 'MigrationTypes', MigrationTypes, create=True):
++            self.assertIs(self.serialize_round_trip(MigrationTypes.Nested), MigrationTypes.Nested)
++
+     def test_serialize_lazy_objects(self):
+         pattern = re.compile(r'^foo$')

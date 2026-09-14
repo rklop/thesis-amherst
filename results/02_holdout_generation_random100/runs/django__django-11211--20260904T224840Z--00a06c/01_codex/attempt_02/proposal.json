@@ -1,0 +1,10 @@
+{
+  "test_name": "test_uuidfield_get_prep_value_normalizes_string",
+  "specification_gap": "UUIDField.get_prep_value() should perform the field\u2019s preliminary, database-independent conversion and return a canonical uuid.UUID for an accepted UUID string. Candidate A only normalizes values inside GenericForeignKey prefetch matching, leaving this broader field contract unsatisfied.",
+  "input_description": "Pass the hyphenated string '550e8400-e29b-41d4-a716-446655440000' to models.UUIDField().get_prep_value().",
+  "expected_output": "The method returns uuid.UUID('550e8400-e29b-41d4-a716-446655440000'), not the original string.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This tests the reusable UUID field preparation entry point underlying the reported relation bug. Candidate B canonicalizes UUID values at that layer; candidate A returns the input string outside its narrowly modified GenericForeignKey path. The diff was verified with git apply --check.",
+  "test_patch": "diff --git a/tests/model_fields/test_uuid.py b/tests/model_fields/test_uuid.py\n--- a/tests/model_fields/test_uuid.py\n+++ b/tests/model_fields/test_uuid.py\n@@ -59,6 +59,11 @@ class TestMethods(SimpleTestCase):\n     def test_deconstruct(self):\n         field = models.UUIDField()\n         name, path, args, kwargs = field.deconstruct()\n         self.assertEqual(kwargs, {})\n \n+    def test_get_prep_value(self):\n+        value = uuid.UUID('550e8400-e29b-41d4-a716-446655440000')\n+        field = models.UUIDField()\n+        self.assertEqual(field.get_prep_value(str(value)), value)\n+\n     def test_to_python(self):\n         self.assertIsNone(models.UUIDField().to_python(None))\n",
+  "test_command": "cd /testbed && python tests/runtests.py model_fields.test_uuid.TestMethods.test_get_prep_value"
+}

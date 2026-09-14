@@ -1,0 +1,10 @@
+{
+  "test_name": "test_fast_delete_stale_instance_clears_pk",
+  "specification_gap": "The specification should cover the zero-row boundary: deleting a still-referenced instance after its database row was removed must clear its primary key even though the second delete affects no rows. However, the supplied candidates are executable-source equivalent, so no semantic test can validly separate them.",
+  "input_description": "Create a User, retain the instance, delete its row through QuerySet.delete(), then call delete() on the retained instance.",
+  "expected_output": "The second delete returns (0, {'delete.User': 0}) and sets the retained instance's pk to None.",
+  "expected_passing_candidate": "uncertain",
+  "why_interesting": "This exercises the public instance delete API when the optimized DELETE matches zero rows, extending the PK-clearing invariant beyond the benchmark's successful one-row deletion. Both candidates should pass because they add the identical setattr() statement; their patches differ only in non-executable diff metadata.",
+  "test_patch": "diff --git a/tests/delete/tests.py b/tests/delete/tests.py\n--- a/tests/delete/tests.py\n+++ b/tests/delete/tests.py\n@@ -467,10 +467,18 @@ class FastDeleteTests(TestCase):\n     def test_fast_delete_qs(self):\n         u1 = User.objects.create()\n         u2 = User.objects.create()\n         self.assertNumQueries(1, User.objects.filter(pk=u1.pk).delete)\n         self.assertEqual(User.objects.count(), 1)\n         self.assertTrue(User.objects.filter(pk=u2.pk).exists())\n \n+    def test_fast_delete_stale_instance_clears_pk(self):\n+        u = User.objects.create()\n+        pk = u.pk\n+        User.objects.filter(pk=pk).delete()\n+        deleted = u.delete()\n+        self.assertEqual(deleted, (0, {'delete.User': 0}))\n+        self.assertIsNone(u.pk)\n+\n     def test_fast_delete_joined_qs(self):\n         a = Avatar.objects.create(desc='a')\n         User.objects.create(avatar=a)\n",
+  "test_command": "python tests/runtests.py delete.tests.FastDeleteTests.test_fast_delete_stale_instance_clears_pk"
+}

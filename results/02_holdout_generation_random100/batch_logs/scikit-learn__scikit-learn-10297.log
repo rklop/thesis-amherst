@@ -1,0 +1,59 @@
+
+===== pipeline invocation 1 started 2026-09-04T22:15:08.277228+00:00 =====
+2026-09-04T22:15:08.322757+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-09-04T22:15:08.960996+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-09-04T22:15:09.364957+00:00 [INFO] candidate_a applies cleanly
+2026-09-04T22:15:09.762900+00:00 [INFO] candidate_b applies cleanly
+2026-09-04T22:15:09.762983+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-09-04T22:15:10.332645+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_gold_pass_current_candidate_fail_random100_20260904/runs/scikit-learn__scikit-learn-10297--20260904T221508Z--e24590/workspace/repo
+2026-09-04T22:15:10.332705+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-09-04T22:15:10.333199+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-09-04T22:15:11.799411+00:00 [INFO] Codex thread started: 01a06e7d-78a8-7ed2-a9df-7a79d0105405
+2026-09-04T22:17:19.115175+00:00 [INFO] Codex turn completed; usage={'input_tokens': 97415, 'cached_input_tokens': 64768, 'cache_write_input_tokens': 0, 'output_tokens': 4371, 'reasoning_output_tokens': 2152}
+2026-09-04T22:17:20.147237+00:00 [INFO] Codex attempt 1 proposed 'ridge_classifier_cv_values_response_axis_contract' in sklearn/linear_model/tests/test_ridge.py
+2026-09-04T22:17:21.537434+00:00 [INFO] attempt 1 candidate_a: ran=True passed=False exit=1
+2026-09-04T22:17:22.862636+00:00 [INFO] attempt 1 candidate_b: ran=True passed=True exit=0
+2026-09-04T22:17:22.863776+00:00 [INFO] Validated separation on Codex attempt 1: candidate_a=FAIL, candidate_b=PASS
+2026-09-04T22:17:22.863813+00:00 [STAGE] 5/6 Asking MiniMax to judge specification signal
+2026-09-04T22:17:24.498084+00:00 [INFO] Launching MiniMax judge attempt 1 with model minimax/MiniMax-M2.5
+2026-09-04T22:17:34.281345+00:00 [INFO] MiniMax rating=high_signal confidence=0.95
+2026-09-04T22:17:34.281388+00:00 [STAGE] 6/6 Writing consolidated results
+2026-09-04T22:17:34.342026+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/sklearn/linear_model/tests/test_ridge.py b/sklearn/linear_model/tests/test_ridge.py
+--- a/sklearn/linear_model/tests/test_ridge.py
++++ b/sklearn/linear_model/tests/test_ridge.py
+@@ -599,6 +599,27 @@ def test_ridgecv_store_cv_values():
+     assert_equal(r.cv_values_.shape, (n_samples, n_responses, n_alphas))
+ 
+ 
++def test_ridge_classifier_cv_values_response_axis_contract():
++    X = np.array([[0., 0.], [0., 1.], [1., 0.],
++                  [1., 1.], [2., 0.], [0., 2.]])
++    alphas = [.1, 1.]
++
++    label_cases = [
++        (np.array([0, 0, 0, 1, 1, 1]), 1),
++        (np.array([0, 0, 1, 1, 2, 2]), 3),
++    ]
++    for y, n_targets in label_cases:
++        classifier = RidgeClassifierCV(
++            alphas=alphas, store_cv_values=True).fit(X, y)
++        assert_equal(classifier.cv_values_.shape,
++                     (X.shape[0], n_targets, len(alphas)))
++
++    attributes_doc = RidgeClassifierCV.__doc__.split(
++        'cv_values_ :', 1)[1].split('coef_ :', 1)[0]
++    assert_true('[n_samples, n_targets, n_alphas]' in attributes_doc)
++    assert_true('[n_samples, n_alphas]' not in attributes_doc)
++
++
+ def test_ridgecv_sample_weight():
+     rng = np.random.RandomState(0)
+     alphas = (0.1, 1.0, 10.0)
+===== END DIFFERENTIATING TEST =====
+
+2026-09-04T22:17:34.342269+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_gold_pass_current_candidate_fail_random100_20260904/runs/scikit-learn__scikit-learn-10297--20260904T221508Z--e24590/SUMMARY.md

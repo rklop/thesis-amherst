@@ -1,0 +1,29 @@
+diff --git a/testing/logging/test_caplog_restore_interaction.py b/testing/logging/test_caplog_restore_interaction.py
+new file mode 100644
+index 000000000..e413a0d01
+--- /dev/null
++++ b/testing/logging/test_caplog_restore_interaction.py
+@@ -0,0 +1,23 @@
++def test_set_level_after_at_level_restores_effective_level(testdir):
++    testdir.makepyfile(
++        """
++        import logging
++
++        def test_configure(caplog):
++            with caplog.at_level(logging.ERROR, logger="temporary"):
++                caplog.set_level(logging.INFO, logger="inside")
++            caplog.set_level(logging.DEBUG, logger="outside")
++
++        def test_handler_was_restored(caplog):
++            logger = logging.getLogger("probe")
++            old_level = logger.level
++            logger.setLevel(logging.WARNING)
++            try:
++                logger.warning("still captured")
++            finally:
++                logger.setLevel(old_level)
++            assert "still captured" in caplog.messages
++        """
++    )
++    result = testdir.runpytest("-q")
++    result.assert_outcomes(passed=2)

@@ -1,0 +1,38 @@
+diff --git a/tests/admin_changelist/tests.py b/tests/admin_changelist/tests.py
+index 01220463aa..f154471cf4 100644
+--- a/tests/admin_changelist/tests.py
++++ b/tests/admin_changelist/tests.py
+@@ -1,4 +1,5 @@
+ import datetime
++from unittest import mock
+ 
+ from django.contrib import admin
+ from django.contrib.admin.models import LogEntry
+@@ -564,6 +565,24 @@ class ChangeListTests(TestCase):
+                 group_changelist = group_model_admin.get_changelist_instance(request)
+                 self.assertEqual(group_changelist.queryset.count(), result_count)
+ 
++    def test_search_terms_are_combined_in_bulk(self):
++        class BulkOnlyQ(models.Q):
++            def __and__(self, other):
++                raise AssertionError('Search terms were combined pairwise.')
++
++        group = Group.objects.create(name='alpha beta gamma')
++        model_admin = GroupAdmin(Group, custom_site)
++        model_admin.search_fields = ['name']
++        request = self.factory.get('/')
++        request.user = self.superuser
++
++        with mock.patch(
++            'django.contrib.admin.options.models.Q',
++            BulkOnlyQ,
++        ):
++            queryset, may_have_duplicates = model_admin.get_search_results(
++                request, Group.objects.all(), 'alpha beta gamma',
++            )
++        self.assertCountEqual(queryset, [group])
++        self.assertIs(may_have_duplicates, False)
++
+     def test_pk_in_search_fields(self):
+         band = Group.objects.create(name='The Hype')
+         Concert.objects.create(name='Woodstock', group=band)

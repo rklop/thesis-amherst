@@ -1,0 +1,48 @@
+
+===== pipeline invocation 1 started 2026-08-18T10:17:54.647496+00:00 =====
+2026-08-18T10:17:54.693347+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-08-18T10:17:55.281891+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-08-18T10:17:55.689921+00:00 [INFO] candidate_a applies cleanly
+2026-08-18T10:17:56.085303+00:00 [INFO] candidate_b applies cleanly
+2026-08-18T10:17:56.085393+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-08-18T10:17:57.890573+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_pipeline_vs_manual_first100_20260818/runs/django__django-13195--20260818T101754Z--deef06/workspace/repo
+2026-08-18T10:17:57.890633+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-08-18T10:17:57.891114+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-08-18T10:17:59.248523+00:00 [INFO] Codex thread started: 01a01460-bcc0-7d02-8792-169c6146e10a
+2026-08-18T10:20:02.094651+00:00 [INFO] Codex turn completed; usage={'input_tokens': 106096, 'cached_input_tokens': 74496, 'cache_write_input_tokens': 0, 'output_tokens': 6322, 'reasoning_output_tokens': 5042}
+2026-08-18T10:20:03.133635+00:00 [INFO] Codex attempt 1 proposed 'test_delete_cookie_supports_strict_set_cookie_override' in tests/responses/test_cookie.py
+2026-08-18T10:20:04.560791+00:00 [INFO] attempt 1 candidate_a: ran=True passed=True exit=0
+2026-08-18T10:20:05.913208+00:00 [INFO] attempt 1 candidate_b: ran=True passed=False exit=1
+2026-08-18T10:20:05.914709+00:00 [INFO] Validated separation on Codex attempt 1: candidate_a=PASS, candidate_b=FAIL
+2026-08-18T10:20:05.914744+00:00 [STAGE] 5/6 Asking MiniMax to judge specification signal
+2026-08-18T10:20:07.518994+00:00 [INFO] Launching MiniMax judge attempt 1 with model minimax/MiniMax-M2.5
+2026-08-18T10:20:24.794707+00:00 [INFO] MiniMax rating=low_signal confidence=0.85
+2026-08-18T10:20:24.794811+00:00 [STAGE] 6/6 Writing consolidated results
+2026-08-18T10:20:25.046113+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/responses/test_cookie.py b/tests/responses/test_cookie.py
+--- a/tests/responses/test_cookie.py
++++ b/tests/responses/test_cookie.py
+@@ -119,3 +119,15 @@ class DeleteCookieTests(SimpleTestCase):
+                 cookie_name = '__%s-c' % prefix
+                 response.delete_cookie(cookie_name)
+                 self.assertIs(response.cookies[cookie_name]['secure'], True)
++
++    def test_delete_cookie_supports_strict_set_cookie_override(self):
++        class StrictSetCookieResponse(HttpResponse):
++            def set_cookie(self, *args, secure=False, **kwargs):
++                if not isinstance(secure, bool):
++                    raise TypeError('secure must be a boolean')
++                return super().set_cookie(
++                    *args, secure=secure, **kwargs
++                )
++
++        response = StrictSetCookieResponse()
++        response.delete_cookie('c')
++        self.assertEqual(response.cookies['c']['secure'], '')
+===== END DIFFERENTIATING TEST =====
+
+2026-08-18T10:20:25.046299+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_pipeline_vs_manual_first100_20260818/runs/django__django-13195--20260818T101754Z--deef06/SUMMARY.md

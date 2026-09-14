@@ -1,0 +1,10 @@
+{
+  "test_name": "test_ignore_microseconds_over_month_boundary",
+  "specification_gap": "timesince() documents that microseconds are ignored, including when calculating the remainder after whole calendar months. Preserving the input microsecond in the month-shift pivot can incorrectly remove a boundary-adjacent week from the output.",
+  "input_description": "Call timesince() with an aware UTC datetime of 2022-01-01 00:00:00.999999 and an explicit aware UTC 'now' of 2022-02-08 00:00:00.",
+  "expected_output": "The result is \"1\u00a0month, 1\u00a0week\". The 999999 microseconds must not reduce the post-month remainder below one week.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This tests the documented microsecond-ignoring invariant through the timezone-aware, multi-month calculation path. Candidate B retains tzinfo while leaving the pivot's microseconds at zero, so it should pass. Candidate A copies 999999 microseconds into the pivot, leaving slightly less than one week and returning only \"1\u00a0month\".",
+  "test_patch": "diff --git a/tests/utils_tests/test_timesince.py b/tests/utils_tests/test_timesince.py\n--- a/tests/utils_tests/test_timesince.py\n+++ b/tests/utils_tests/test_timesince.py\n@@ -30,6 +30,13 @@ class TimesinceTests(TestCase):\n             timesince(self.t, self.t + self.onemicrosecond), \"0\\xa0minutes\"\n         )\n         self.assertEqual(timesince(self.t, self.t + self.onesecond), \"0\\xa0minutes\")\n \n+    def test_ignore_microseconds_over_month_boundary(self):\n+        d = datetime.datetime(\n+            2022, 1, 1, microsecond=999999, tzinfo=datetime.timezone.utc\n+        )\n+        now = datetime.datetime(2022, 2, 8, tzinfo=datetime.timezone.utc)\n+        self.assertEqual(timesince(d, now), \"1\\xa0month, 1\\xa0week\")\n+\n     def test_other_units(self):\n         \"\"\"Test other units.\"\"\"\n         self.assertEqual(timesince(self.t, self.t + self.oneminute), \"1\\xa0minute\")\n",
+  "test_command": "cd /testbed && python tests/runtests.py utils_tests.test_timesince.TimesinceTests.test_ignore_microseconds_over_month_boundary"
+}

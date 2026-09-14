@@ -1,0 +1,47 @@
+diff --git a/sympy/core/mod.py b/sympy/core/mod.py
+index eae25630c..2511e70bb 100644
+--- a/sympy/core/mod.py
++++ b/sympy/core/mod.py
+@@ -124,8 +124,9 @@ def doit(p, q):
+                 both_l[isinstance(arg, cls)].append(arg)
+ 
+             if mod_l and all(inner.args[1] == q for inner in mod_l):
+-                # finding distributive term
++                # Original case: existing mod terms with same q
+                 non_mod_l = [cls(x, q) for x in non_mod_l]
++                # finding distributive term
+                 mod = []
+                 non_mod = []
+                 for j in non_mod_l:
+@@ -138,6 +139,31 @@ def doit(p, q):
+                 prod_mod1 = Mul(*[i.args[0] for i in mod_l])
+                 net = prod_mod1*prod_mod
+                 return prod_non_mod*cls(net, q)
++            elif not mod_l:
++                # New case: no existing mod terms in the product
++                was = non_mod_l[:]
++                non_mod_l = [cls(x, q) for x in non_mod_l]
++                # Check if any became 0 (would incorrectly simplify to 0)
++                any_zero = any(x == 0 for x in non_mod_l)
++                # Check if all became Mod (would cause recursion)
++                all_mod = all(isinstance(x, cls) for x in non_mod_l)
++                # Check if at least one changed
++                changed = was != non_mod_l
++                # Check if coefficient simplifies to 1 (meaningful simplification)
++                if not any_zero and not all_mod and changed:
++                    mod = []
++                    non_mod = []
++                    for j in non_mod_l:
++                        if isinstance(j, cls):
++                            mod.append(j.args[0])
++                        else:
++                            non_mod.append(j)
++                    prod_non_mod = Mul(*non_mod)
++                    if prod_non_mod == S.One:
++                        # finding distributive term
++                        prod_mod = Mul(*mod)
++                        net = prod_mod
++                        return prod_non_mod*cls(net, q)
+ 
+         # XXX other possibilities?
+ 

@@ -1,0 +1,33 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index d69c24419b..52c8aa0c5b 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1666,6 +1666,7 @@ class Query(BaseExpression):
+             filter_expr = (filter_lhs, OuterRef(filter_rhs.name))
+         # Generate the inner query.
+         query = Query(self.model)
++        query._filtered_relations = self._filtered_relations.copy()
+         query.add_filter(filter_expr)
+         query.clear_ordering(True)
+         # Try to have as simple as possible subquery -> trim leading joins from
+@@ -2160,7 +2161,19 @@ class Query(BaseExpression):
+         # But the first entry in the query's FROM clause must not be a JOIN.
+         for table in self.alias_map:
+             if self.alias_refcount[table] > 0:
+-                self.alias_map[table] = BaseTable(self.alias_map[table].table_name, table)
++                join = self.alias_map[table]
++                if join.filtered_relation:
++                    # When the Join has a filtered_relation, we need to keep the parent table
++                    # in the FROM clause. Add it as a BaseTable.
++                    parent = join.parent_alias
++                    if parent in self.alias_map and self.alias_refcount.get(parent, 0) == 0:
++                        # Add the parent table to FROM
++                        self.alias_map[parent] = BaseTable(self.alias_map[parent].table_name, parent)
++                        self.alias_refcount[parent] = 1
++                    # Set join_type to INNER to include in FROM
++                    join.join_type = INNER
++                else:
++                    self.alias_map[table] = BaseTable(self.alias_map[table].table_name, table)
+                 break
+         self.set_select([f.get_col(select_alias) for f in select_fields])
+         return trimmed_prefix, contains_louter

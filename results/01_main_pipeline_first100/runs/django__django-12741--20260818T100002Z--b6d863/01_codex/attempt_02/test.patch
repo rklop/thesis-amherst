@@ -1,0 +1,44 @@
+diff --git a/tests/backends/base/test_operations.py b/tests/backends/base/test_operations.py
+--- a/tests/backends/base/test_operations.py
++++ b/tests/backends/base/test_operations.py
+@@ -1,5 +1,6 @@
+ import decimal
+ 
++from django.core.management import call_command
+ from django.core.management.color import no_style
+ from django.db import NotSupportedError, connection, transaction
+ from django.db.backends.base.operations import BaseDatabaseOperations
+@@ -153,6 +154,32 @@ class SqlFlushTests(TransactionTestCase):
+     available_apps = ['backends']
+ 
++    def test_flush_command_supports_single_argument_backend_override(self):
++        Author.objects.create(name='George Orwell')
++
++        class SingleArgumentDatabaseOperations(connection.ops.__class__):
++            def execute_sql_flush(self, sql_list):
++                with transaction.atomic(
++                    using=self.connection.alias,
++                    savepoint=self.connection.features.can_rollback_ddl,
++                ):
++                    with self.connection.cursor() as cursor:
++                        for sql in sql_list:
++                            cursor.execute(sql)
++
++        original_ops = connection.ops
++        connection.ops = SingleArgumentDatabaseOperations(connection)
++        try:
++            call_command(
++                'flush',
++                database=connection.alias,
++                interactive=False,
++                inhibit_post_migrate=True,
++                verbosity=0,
++            )
++        finally:
++            connection.ops = original_ops
++
++        self.assertIs(Author.objects.exists(), False)
++
+     def test_sql_flush_no_tables(self):
+         self.assertEqual(connection.ops.sql_flush(no_style(), []), [])
+ 

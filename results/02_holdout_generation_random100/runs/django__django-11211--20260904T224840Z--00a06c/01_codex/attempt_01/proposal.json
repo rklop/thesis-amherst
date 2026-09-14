@@ -1,0 +1,10 @@
+{
+  "test_name": "test_get_prep_value_converts_string",
+  "specification_gap": "UUIDField.get_prep_value() should perform backend-independent normalization of every accepted UUID input representation, rather than leaving valid UUID strings unconverted. This is a documented public model-field conversion hook and is also relied upon by ORM features such as GenericForeignKey prefetch key matching.",
+  "input_description": "Pass the hyphenated string \"550e8400-e29b-41d4-a716-446655440000\" to models.UUIDField().get_prep_value().",
+  "expected_output": "The method returns the equivalent uuid.UUID object. Candidate B adds this general conversion; candidate A only changes GenericForeignKey's call site and therefore returns the original string.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This checks the general UUIDField preparation invariant through its public field API, exposing that candidate A is a narrow GenericForeignKey workaround while candidate B fixes all callers that depend on normalized UUID preparation.",
+  "test_patch": "diff --git a/tests/model_fields/test_uuid.py b/tests/model_fields/test_uuid.py\n--- a/tests/model_fields/test_uuid.py\n+++ b/tests/model_fields/test_uuid.py\n@@ -61,6 +61,13 @@ class TestMethods(SimpleTestCase):\n         name, path, args, kwargs = field.deconstruct()\n         self.assertEqual(kwargs, {})\n \n+    def test_get_prep_value_converts_string(self):\n+        value = uuid.UUID('550e8400-e29b-41d4-a716-446655440000')\n+        self.assertEqual(\n+            models.UUIDField().get_prep_value(str(value)),\n+            value,\n+        )\n+\n     def test_to_python(self):\n         self.assertIsNone(models.UUIDField().to_python(None))\n",
+  "test_command": "cd /testbed && python tests/runtests.py model_fields.test_uuid.TestMethods.test_get_prep_value_converts_string"
+}

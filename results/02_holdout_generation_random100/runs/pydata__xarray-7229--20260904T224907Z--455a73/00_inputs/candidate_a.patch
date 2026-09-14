@@ -1,0 +1,116 @@
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 3f7e8f74..412197dd 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -253,10 +253,18 @@ def build_output_coords_and_indexes(
+     coords_list = _get_coords_list(args)
+ 
+     if len(coords_list) == 1 and not exclude_dims:
+-        # we can skip the expensive merge
++        # we can skip the expensive merge, but still need to apply combine_attrs
++        # to coordinate attrs if keep_attrs is a callable
+         (unpacked_coords,) = coords_list
+         merged_vars = dict(unpacked_coords.variables)
+         merged_indexes = dict(unpacked_coords.xindexes)
++        # Apply combine_attrs to coordinate attrs even in the fast path
++        if callable(combine_attrs):
++            for name, var in merged_vars.items():
++                attrs = [var.attrs]
++                merged_vars[name] = var._replace(
++                    attrs=combine_attrs(attrs, context="coordinates")
++                )
+     else:
+         merged_vars, merged_indexes = merge_coordinates_without_align(
+             coords_list, exclude_dims=exclude_dims, combine_attrs=combine_attrs
+@@ -1772,6 +1780,75 @@ def dot(
+     return result.transpose(*all_dims, missing_dims="ignore")
+ 
+ 
++
++def _keep_attrs_from_x(x):
++    """Create a keep_attrs function that uses attrs from x appropriately.
++
++    This is used by xr.where(..., keep_attrs=True) to properly handle
++    both variable attributes and coordinate attributes.
++    """
++    from .dataarray import DataArray
++    from .dataset import Dataset
++
++    # Check what type x is
++    x_is_scalar = not isinstance(x, (DataArray, Dataset))
++    x_is_dataset = isinstance(x, Dataset)
++    x_is_dataarray = isinstance(x, DataArray)
++
++    def _keep_attrs(attrs, context=None):
++        # If x is a scalar, always return empty dict
++        if x_is_scalar:
++            return {}
++
++        if x_is_dataset:
++            # For Datasets, we need to handle attrs differently
++            # For Dataset attrs: use x.attrs
++            # For data variable attrs: check x.data_vars
++            # For coordinate attrs: check x.coords
++            
++            x_attrs = getattr(x, "attrs", {})
++            if x_attrs in attrs:
++                return x_attrs
++            
++            # Check data variables
++            for var_name in x.data_vars:
++                var_attrs = x[var_name].attrs
++                if var_attrs in attrs:
++                    return var_attrs
++            
++            # Check coordinates
++            for coord_name in x.coords:
++                coord_attrs = x[coord_name].attrs
++                if coord_attrs in attrs:
++                    return coord_attrs
++            
++            return attrs[0] if attrs else {}
++        elif x_is_dataarray:
++            # x is a DataArray
++            x_attrs = getattr(x, "attrs", {})
++
++            # If x's attrs is in the list, this is variable attrs - use x's attrs
++            if x_attrs in attrs:
++                return x_attrs
++
++            # Otherwise (x's attrs not in list) - this is coordinate attrs
++            # Use x's coordinate attrs if available
++            for coord_name in x.coords:
++                coord_attrs = x[coord_name].attrs
++                if coord_attrs in attrs:
++                    return coord_attrs
++
++            # If x is a DataArray but attrs don't match, it means x is not in the
++            # args list for this merge (e.g., x is DataArray but result is Dataset).
++            # In this case, return {} to avoid using wrong attrs.
++            return {}
++
++        # Fallback for unknown types
++        return attrs[0] if attrs else {}
++
++    return _keep_attrs
++
++
+ def where(cond, x, y, keep_attrs=None):
+     """Return elements from `x` or `y` depending on `cond`.
+ 
+@@ -1858,9 +1935,12 @@ def where(cond, x, y, keep_attrs=None):
+     if keep_attrs is None:
+         keep_attrs = _get_keep_attrs(default=False)
+     if keep_attrs is True:
+-        # keep the attributes of x, the second parameter, by default to
+-        # be consistent with the `where` method of `DataArray` and `Dataset`
+-        keep_attrs = lambda attrs, context: getattr(x, "attrs", {})
++        # Keep the attributes of x, the second parameter, by default to
++        # be consistent with the `where` method of `DataArray` and `Dataset`.
++        # We need to handle coordinate attributes separately from variable attributes.
++        # When x is a DataArray, use its attrs for variables and its coords' attrs for coordinates.
++        # When x is a scalar, return empty attrs.
++        keep_attrs = _keep_attrs_from_x(x)
+ 
+     # alignment for three arguments is complicated, so don't support it yet
+     return apply_ufunc(

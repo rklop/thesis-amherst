@@ -1,0 +1,42 @@
+{
+  "id": "06d3661fc179cfeb3a8958857509aef9",
+  "created": 1787048735,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n{\"rating\": \"high_signal\", \"confidence\": 0.85, \"summary\": \"The test exercises a legitimate public API behavior (ContextMixin's context merge precedence) at a key boundary (extra_context vs URL kwargs with same key). Candidate B passes and returns the expected 'from-extra-context', which correctly preserves ContextMixin's documented merge behavior where get_context_data() kwargs take precedence over extra_context. Candidate A incorrectly wraps URL kwargs after get_context_data(), overwriting the extra_context with SimpleLazyObject wrappers. This is a real specification gap in the context composition that affects users combining URL kwargs with extra_context. The test uses standard Django testing patterns without brittle implementation assertions.\", \"specification_signal\": [\"Tests ContextMixin's documented merge behavior when extra_context and URL kwargs collide\", \"Validates that deprecation warning wrapping doesn't break the public context composition API\", \"Exercises a regression that affects users of TemplateView with both extra_context and URL kwargs\"], \"oracle_quality\": [\"Expected output 'from-extra-context' is defensible - extra_context should win when keys collide per ContextMixin semantics\", \"Candidate B's output matches the expected merge order\", \"The SimpleLazyObject wrapper in candidate_a's failure demonstrates the regression directly\"], \"concerns\": [\"The test addresses a specific edge case that is somewhat tangential to the main issue (crashing with SimpleLazyObject in database queries)\", \"Tests behavior that only manifests when both extra_context and URL kwargs share the same key\"], \"human_review_questions\": [\"Is the merge precedence (extra_context overriding URL kwargs) the intended behavior, or should URL kwargs take precedence?\", \"Is this edge case common enough to warrant being part of the primary test suite for this issue?\"]}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this test case carefully.\n\nThe issue is about `TemplateView.get_context_data()`'s kwargs returning `SimpleLazyObject` that causes a crash when filtering. The test in the original test patch (`test_template_params_filtering`) tests that URL kwargs work properly when used in database queries.\n\nNow I need to evaluate the generated test proposal:\n\n**Test proposal:**\n- Test name: `TemplateViewTest.test_extra_context_overrides_url_kwargs`\n- Purpose: When a deprecated URL keyword and TemplateView.extra_context use the same key, extra_context must retain ContextMixin's public merge precedence.\n- Candidate A incorrectly reapplies URL kwargs after get_context_data(), overwriting extra_context\n- Candidate B preserves the precedence\n\nLet me look at the test results:\n- **candidate_a**: FAILED - returned `<SimpleLazyObject: 'from-url'>` instead of `'from-extra-context'`\n- **candidate_b**: PASSED - returned `'from-extra-context'` as expected\n\nNow I need to judge whether this is a \"high_signal\", \"low_signal\", or \"ambiguous\" test.\n\n**Analysis:**\n\n1. **Specification signal**: Does the test exercise intended public behavior?\n   - The test checks that when you provide `extra_context` with a key that matches a URL kwarg, the `extra_context` should take precedence.\n   - This is about the merge behavior of `ContextMixin.get_context_data()`. Looking at Django's ContextMixin, the `get_context_data()` method takes any keyword arguments and adds them to the context. When you use `TemplateView.as_view(extra_context={...})`, the extra_context is merged into the context.\n   - The issue is about how the deprecation warning wrapper interacts with this merge. This is indeed a public API behavior - the merge order matters for users who use both URL kwargs and extra_context.\n\n2. **Oracle quality**: Is the expected output defensible?\n   - The expected behavior is that `extra_context` should override or at least be merged in a predictable way with URL kwargs. \n   - When candidate A wraps kwargs with SimpleLazyObject AFTER get_context_data(), the wrapped URL kwargs overwrite the extra_context. Candidate B wraps them BEFORE, so extra_context takes precedence. The test expects `extra_context` to win, which aligns with how Django's ContextMixin should work\u2014the method receiving kwargs should have priority over URL parameters.\n   - However, the issue explicitly describes SimpleLazyObjects causing crashes in database queries, making this test somewhat tangential to that core problem.\n   - The test addresses a genuine specification gap in the context merge order, though it's somewhat removed from the main issue.\n   - Since this tests a specific code path related to how kwargs are wrapped and merged, it's reasonably general and uses standard Django APIs.\n   - Candidate B's passing indicates it better preserves the intended behavior.\n\nGiven the validated execution showing candidate_b passing with the correct result while candidate_a fails, the test appears sound and the winner aligns with proper Django behavior.\n   - The test verifies a legitimate edge case in the public API around context merging.\n   - It uses standard Django testing patterns rather than implementation-specific assertions.\n   - The expected behavior\u2014that extra_context should override URL kwargs in the context\u2014aligns with how ContextMixin is designed to work.\n   - There's a question about whether this regression is directly tied to the original issue or a separate concern, but the issue does mention wrapping kwargs with deprecation warnings, which is exactly what triggers this scenario.\n   - I should evaluate whether this test deserves a high signal rating.\n\nThe test checks a specific edge case in the context merging logic that emerges from how kwargs get wrapped with deprecation warnings. It's not simply detecting that the wrapper exists\u2014it validates the actual behavior when extra_context and URL kwargs collide. While it's a narrow scenario, it does exercise the intended public API and catches a meaningful specification gap without depending on implementation specifics. The test uses standard Django testing patterns, so it's not overly brittle despite being somewhat specific. Given that it catches a genuine bug and candidate_b appears more correct, I'm confident this deserves a high_signal rating with 0.85 confidence\u2014the main question is whether the edge case is significant enough to warrant that classification.\n",
+        "provider_specific_fields": {
+          "audio_content": "",
+          "name": "MiniMax AI"
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 1206,
+    "prompt_tokens": 2401,
+    "total_tokens": 3607,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

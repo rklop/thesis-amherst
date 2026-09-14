@@ -1,0 +1,74 @@
+diff --git a/sympy/codegen/ast.py b/sympy/codegen/ast.py
+index a02714b174..d68896717f 100644
+--- a/sympy/codegen/ast.py
++++ b/sympy/codegen/ast.py
+@@ -869,6 +869,47 @@ def _construct_iterable(cls, itr):
+         return _sympify(itr)
+ 
+ 
++class _Str(Basic):
++    """Internal wrapper for string values in args."""
++    __slots__ = ('_text',)
++
++    def __new__(cls, s):
++        obj = Basic.__new__(cls)
++        obj._text = s
++        return obj
++
++    @property
++    def args(self):
++        return ()
++
++    def __str__(self):
++        return self._text
++
++    def __repr__(self):
++        return repr(self._text)
++
++    def __eq__(self, other):
++        if isinstance(other, _Str):
++            return self._text == other._text
++        return self._text == other
++
++    def __hash__(self):
++        return hash(self._text)
++
++    def _hashable_content(self):
++        return (self._text,)
++
++    def __getattribute__(self, name):
++        # Delegate string methods to the underlying string
++        if name.startswith('__') or name in ('args', '_text'):
++            return object.__getattribute__(self, name)
++        try:
++            return object.__getattribute__(self, name)
++        except AttributeError:
++            return getattr(self._text, name)
++
++
++
+ class String(Token):
+     """ SymPy object representing a string.
+ 
+@@ -895,14 +936,19 @@ class String(Token):
+ 
+     """
+     __slots__ = ('text',)
+-    not_in_args = ['text']
++    not_in_args = []
+     is_Atom = True
+ 
+     @classmethod
+     def _construct_text(cls, text):
++        if isinstance(text, _Str):
++            return text
+         if not isinstance(text, str):
+             raise TypeError("Argument text is not a string type.")
+-        return text
++        return _Str(text)
++
++    def _sympyrepr(self, printer, *args, **kwargs):
++        return "String({!r})".format(self.text)
+ 
+     def _sympystr(self, printer, *args, **kwargs):
+         return self.text

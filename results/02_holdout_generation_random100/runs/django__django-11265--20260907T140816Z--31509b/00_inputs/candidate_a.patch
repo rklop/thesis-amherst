@@ -1,0 +1,54 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index d69c24419b..50ffd57c8c 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1666,6 +1666,7 @@ class Query(BaseExpression):
+             filter_expr = (filter_lhs, OuterRef(filter_rhs.name))
+         # Generate the inner query.
+         query = Query(self.model)
++        query._filtered_relations = self._filtered_relations.copy()
+         query.add_filter(filter_expr)
+         query.clear_ordering(True)
+         # Try to have as simple as possible subquery -> trim leading joins from
+@@ -2122,6 +2123,13 @@ class Query(BaseExpression):
+         for trimmed_paths, path in enumerate(all_paths):
+             if path.m2m:
+                 break
++            # Don't trim if the path has a filtered_relation because the condition
++            # would be lost (it's applied in the JOIN's ON clause) and we'd lose
++            # the base table reference.
++            if path.filtered_relation:
++                # Set trimmed_paths back so the rest of the function works correctly
++                trimmed_paths = -1
++                break
+             if self.alias_map[lookup_tables[trimmed_paths + 1]].join_type == LOUTER:
+                 contains_louter = True
+             alias = lookup_tables[trimmed_paths]
+@@ -2142,7 +2150,10 @@ class Query(BaseExpression):
+         # Lets still see if we can trim the first join from the inner query
+         # (that is, self). We can't do this for LEFT JOINs because we would
+         # miss those rows that have nothing on the outer side.
+-        if self.alias_map[lookup_tables[trimmed_paths + 1]].join_type != LOUTER:
++        # Also, don't trim if the path has a filtered_relation because we'd lose
++        # the condition applied in the JOIN's ON clause.
++        if (self.alias_map[lookup_tables[trimmed_paths + 1]].join_type != LOUTER 
++                and not all_paths[trimmed_paths].filtered_relation):
+             select_fields = [r[0] for r in join_field.related_fields]
+             select_alias = lookup_tables[trimmed_paths + 1]
+             self.unref_alias(lookup_tables[trimmed_paths])
+@@ -2158,9 +2169,14 @@ class Query(BaseExpression):
+             select_alias = lookup_tables[trimmed_paths]
+         # The found starting point is likely a Join instead of a BaseTable reference.
+         # But the first entry in the query's FROM clause must not be a JOIN.
++        # However, if the join has a filtered_relation, we can't convert it to 
++        # BaseTable because we'd lose the filtered relation condition which is
++        # applied in the ON clause of the JOIN.
+         for table in self.alias_map:
+             if self.alias_refcount[table] > 0:
+-                self.alias_map[table] = BaseTable(self.alias_map[table].table_name, table)
++                join = self.alias_map[table]
++                if not join.filtered_relation:
++                    self.alias_map[table] = BaseTable(join.table_name, table)
+                 break
+         self.set_select([f.get_col(select_alias) for f in select_fields])
+         return trimmed_prefix, contains_louter

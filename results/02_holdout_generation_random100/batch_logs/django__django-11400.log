@@ -1,0 +1,73 @@
+
+===== pipeline invocation 1 started 2026-09-04T23:16:33.592583+00:00 =====
+2026-09-04T23:16:33.637588+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-09-04T23:16:34.264855+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-09-04T23:16:34.725220+00:00 [INFO] candidate_a applies cleanly
+2026-09-04T23:16:35.124800+00:00 [INFO] candidate_b applies cleanly
+2026-09-04T23:16:35.124883+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-09-04T23:16:36.170780+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_gold_pass_current_candidate_fail_random100_20260904/runs/django__django-11400--20260904T231633Z--1b54ef/workspace/repo
+2026-09-04T23:16:36.170838+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-09-04T23:16:36.171407+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-09-04T23:16:37.616201+00:00 [INFO] Codex thread started: 01a06eb5-b664-7180-b721-5d34e189c65b
+2026-09-04T23:19:11.918855+00:00 [INFO] Codex turn completed; usage={'input_tokens': 263786, 'cached_input_tokens': 232064, 'cache_write_input_tokens': 0, 'output_tokens': 6552, 'reasoning_output_tokens': 4409}
+2026-09-04T23:19:12.925262+00:00 [INFO] Codex attempt 1 proposed 'test_get_choices_preserves_default_manager_ordering' in tests/model_fields/models.py, tests/model_fields/tests.py
+2026-09-04T23:19:13.386848+00:00 [INFO] attempt 1 candidate_a: ran=False passed=False exit=92
+2026-09-04T23:19:13.852103+00:00 [INFO] attempt 1 candidate_b: ran=False passed=False exit=92
+2026-09-04T23:19:13.852768+00:00 [WARN] Codex attempt 1 did not meet the acceptance rule; retrying with feedback
+2026-09-04T23:19:13.853215+00:00 [INFO] Launching fresh Codex attempt 2 with model gpt-5.6-sol
+2026-09-04T23:19:15.541145+00:00 [INFO] Codex thread started: 01a06eb8-1f47-7fb0-9726-3faf67357511
+2026-09-04T23:22:29.916921+00:00 [INFO] Codex turn completed; usage={'input_tokens': 316096, 'cached_input_tokens': 268288, 'cache_write_input_tokens': 0, 'output_tokens': 8380, 'reasoning_output_tokens': 4813}
+2026-09-04T23:22:31.016543+00:00 [INFO] Codex attempt 2 proposed 'test_get_choices_uses_default_manager_ordering' in tests/model_fields/models.py, tests/model_fields/tests.py
+2026-09-04T23:22:32.552645+00:00 [INFO] attempt 2 candidate_a: ran=True passed=False exit=1
+2026-09-04T23:22:34.094757+00:00 [INFO] attempt 2 candidate_b: ran=True passed=True exit=0
+2026-09-04T23:22:34.096313+00:00 [INFO] Validated separation on Codex attempt 2: candidate_a=FAIL, candidate_b=PASS
+2026-09-04T23:22:34.096360+00:00 [STAGE] 5/6 Asking MiniMax to judge specification signal
+2026-09-04T23:22:35.753603+00:00 [INFO] Launching MiniMax judge attempt 1 with model minimax/MiniMax-M2.5
+2026-09-04T23:22:45.575744+00:00 [INFO] MiniMax rating=high_signal confidence=0.95
+2026-09-04T23:22:45.575785+00:00 [STAGE] 6/6 Writing consolidated results
+2026-09-04T23:22:45.824413+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/model_fields/models.py b/tests/model_fields/models.py
+--- a/tests/model_fields/models.py
++++ b/tests/model_fields/models.py
+@@ -20,9 +20,18 @@ except ImportError:
+     Image = None
+ 
+ 
++class FooManager(models.Manager):
++    def get_queryset(self):
++        return super().get_queryset().order_by('-a')
++
++
+ class Foo(models.Model):
+     a = models.CharField(max_length=10)
+     d = models.DecimalField(max_digits=5, decimal_places=3)
++    objects = FooManager()
++
++    class Meta:
++        ordering = ('a',)
+ 
+ 
+ def get_foo():
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -231,6 +231,12 @@ class GetChoicesOrderingTests(TestCase):
+     def assertChoicesEqual(self, choices, objs):
+         self.assertEqual(choices, [(obj.pk, str(obj)) for obj in objs])
+ 
++    def test_get_choices_uses_default_manager_ordering(self):
++        self.assertChoicesEqual(
++            self.field.get_choices(include_blank=False),
++            [self.foo2, self.foo1],
++        )
++
+     def test_get_choices(self):
+         self.assertChoicesEqual(
+             self.field.get_choices(include_blank=False, ordering=('a',)),
+===== END DIFFERENTIATING TEST =====
+
+2026-09-04T23:22:45.824586+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/evaluation_records/differentiating_gold_pass_current_candidate_fail_random100_20260904/runs/django__django-11400--20260904T231633Z--1b54ef/SUMMARY.md

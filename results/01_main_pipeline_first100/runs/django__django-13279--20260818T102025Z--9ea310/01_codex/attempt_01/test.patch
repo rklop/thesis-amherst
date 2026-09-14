@@ -1,0 +1,21 @@
+diff --git a/tests/sessions_tests/tests.py b/tests/sessions_tests/tests.py
+--- a/tests/sessions_tests/tests.py
++++ b/tests/sessions_tests/tests.py
+@@ -321,6 +321,15 @@ class SessionTestsMixin:
+         self.assertEqual(
+             self.session.decode(legacy_encoded),
+             {'a test key': 'a test value'},
+         )
+ 
++    def test_sha1_encode_emits_pre31_wire_format(self):
++        data = {'message': 'caf\u00e9', 'items': []}
++        with override_settings(DEFAULT_HASHING_ALGORITHM='sha1'):
++            encoded = self.session.encode(data)
++        payload = base64.b64decode(encoded.encode('ascii'))
++        digest, serialized = payload.split(b':', 1)
++        self.assertRegex(digest, br'^[0-9a-f]{40}$')
++        self.assertEqual(JSONSerializer().loads(serialized), data)
++
+     def test_decode_failure_logged_to_security(self):
+         bad_encode = base64.b64encode(b'flaskdj:alkdjf').decode('ascii')
+         with self.assertLogs('django.security.SuspiciousSession', 'WARNING') as cm:

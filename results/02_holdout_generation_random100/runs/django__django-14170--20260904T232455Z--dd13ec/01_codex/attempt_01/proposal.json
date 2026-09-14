@@ -1,0 +1,10 @@
+{
+  "test_name": "test_extract_iso_year_exact_lookup_at_boundary",
+  "specification_gap": "ISO-year lookup bounds for DateTimeField must undergo backend adaptation. Otherwise, on SQLite with USE_TZ=True, the aware lower bound is serialized with a '+00:00' suffix while stored values are normalized to offset-free UTC text, incorrectly excluding the exact lower-bound value.",
+  "input_description": "Create a row at 2014-12-29 00:00:00 UTC, the first instant of ISO year 2015, and retrieve it with start_datetime__iso_year=2015.",
+  "expected_output": "The lookup returns the created row. Candidate B adapts the bound and passes; candidate A supplies the raw aware datetime and fails at the boundary.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This is an externally observable timezone-aware boundary failure, exercising the general backend-adaptation invariant without asserting SQL formatting or implementation details.",
+  "test_patch": "diff --git a/tests/db_functions/datetime/test_extract_trunc.py b/tests/db_functions/datetime/test_extract_trunc.py\n--- a/tests/db_functions/datetime/test_extract_trunc.py\n+++ b/tests/db_functions/datetime/test_extract_trunc.py\n@@ -1064,6 +1064,14 @@ class DateFunctionTests(TestCase):\n @override_settings(USE_TZ=True, TIME_ZONE='UTC')\n class DateFunctionWithTimeZoneTests(DateFunctionTests):\n \n+    def test_extract_iso_year_exact_lookup_at_boundary(self):\n+        first_day = timezone.make_aware(\n+            datetime(2014, 12, 29), is_dst=False,\n+        )\n+        obj = self.create_model(first_day, None)\n+        self.assertEqual(\n+            DTModel.objects.get(start_datetime__iso_year=2015), obj,\n+        )\n+\n     def get_timezones(self, key):\n         for constructor in ZONE_CONSTRUCTORS:\n             yield constructor(key)\n",
+  "test_command": "python tests/runtests.py db_functions.datetime.test_extract_trunc.DateFunctionWithTimeZoneTests.test_extract_iso_year_exact_lookup_at_boundary"
+}

@@ -1,0 +1,47 @@
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index b8efb9f881..648f42cb23 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -216,16 +216,25 @@ def get_child_arguments():
+     executable is reported to not have the .exe extension which can cause bugs
+     on reloading.
+     """
+-    import django.__main__
+-    django_main_path = Path(django.__main__.__file__)
++    import __main__
+     py_script = Path(sys.argv[0])
+ 
+     args = [sys.executable] + ['-W%s' % o for o in sys.warnoptions]
+-    if py_script == django_main_path:
+-        # The server was started with `python -m django runserver`.
+-        args += ['-m', 'django']
+-        args += sys.argv[1:]
+-    elif not py_script.exists():
++    # __main__.__spec__ is set when the server was started with the `-m` option,
++    # see https://docs.python.org/3/reference/import.html#main-spec
++    # __spec__.parent is the parent package, e.g. 'django' for `python -m django runserver`
++    # or 'utils_tests.test_module' for `python -m utils_tests.test_module runserver`
++    # Additionally, check that sys.argv[0] matches either __main__.__file__ or
++    # __spec__.origin to ensure we're not using a stale __spec__ from a previous
++    # invocation (e.g., in tests where __main__ is mocked).
++    if getattr(__main__, '__spec__', None) is not None and __main__.__spec__.parent:
++        # Check __file__ first (this is what the test mocks), then fall back to __spec__.origin
++        main_path = Path(getattr(__main__, '__file__', '') or __main__.__spec__.origin or '')
++        if main_path.resolve() == py_script.resolve():
++            args += ['-m', __main__.__spec__.parent]
++            args += sys.argv[1:]
++            return args
++    if not py_script.exists():
+         # sys.argv[0] may not exist for several reasons on Windows.
+         # It may exist with a .exe extension or have a -script.py suffix.
+         exe_entrypoint = py_script.with_suffix('.exe')
+@@ -241,8 +250,7 @@ def get_child_arguments():
+             # args parameter accepts path-like on Windows from Python 3.8.
+             return [*args, str(script_entrypoint), *sys.argv[1:]]
+         raise RuntimeError('Script %s does not exist.' % py_script)
+-    else:
+-        args += sys.argv
++    args += sys.argv
+     return args
+ 
+ 

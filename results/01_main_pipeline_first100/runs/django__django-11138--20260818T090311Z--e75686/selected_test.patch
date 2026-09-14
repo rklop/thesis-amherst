@@ -1,0 +1,29 @@
+diff --git a/tests/timezones/tests.py b/tests/timezones/tests.py
+--- a/tests/timezones/tests.py
++++ b/tests/timezones/tests.py
+@@ -311,6 +311,25 @@ class NewDatabaseTests(TestCase):
+         self.assertEqual(Event.objects.filter(dt__in=(prev, dt, next)).count(), 1)
+         self.assertEqual(Event.objects.filter(dt__range=(prev, next)).count(), 1)
+ 
++    def test_query_date_uses_database_timezone_offset_near_midnight(self):
++        original_timezone = connection.settings_dict['TIME_ZONE']
++        try:
++            connection.settings_dict['TIME_ZONE'] = 'Asia/Bangkok'
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++            # 03:50 in Bangkok is 23:50 on the previous day in Nairobi.
++            event_datetime = datetime.datetime(2016, 1, 2, 3, 50, tzinfo=ICT)
++            Event.objects.create(dt=event_datetime)
++            self.assertTrue(Event.objects.filter(dt__date=datetime.date(2016, 1, 1)).exists())
++        finally:
++            connection.settings_dict['TIME_ZONE'] = original_timezone
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
+     @requires_tz_support
+     def test_query_filter_with_naive_datetime(self):
+         dt = datetime.datetime(2011, 9, 1, 12, 20, 30, tzinfo=EAT)

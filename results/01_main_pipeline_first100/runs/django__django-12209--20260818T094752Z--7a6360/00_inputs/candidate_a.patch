@@ -1,0 +1,56 @@
+diff --git a/django/db/models/base.py b/django/db/models/base.py
+index e3b14a41a0..7a42898bd1 100644
+--- a/django/db/models/base.py
++++ b/django/db/models/base.py
+@@ -415,6 +415,25 @@ class Model(metaclass=ModelBase):
+         # Set up the storage for instance state
+         self._state = ModelState()
+ 
++        # Track if pk was explicitly provided
++        pk_field = opts.pk
++        if pk_field:
++            pk_attname = pk_field.attname
++            # Check if pk was provided via args (if pk is first field, it would be args[0])
++            if args:
++                # Check if pk field is in the args
++                pk_field_index = None
++                for i, field in enumerate(opts.concrete_fields):
++                    if field == pk_field:
++                        pk_field_index = i
++                        break
++                if pk_field_index is not None and len(args) > pk_field_index:
++                    if args[pk_field_index] is not _DEFERRED:
++                        self._state.fields_cache['pk_set_explicitly'] = True
++            # Check if pk was provided via kwargs
++            if 'pk' in kwargs or pk_attname in kwargs:
++                self._state.fields_cache['pk_set_explicitly'] = True
++
+         # There is a rather weird disparity here; if kwargs, it's set, then args
+         # overrides it. It should be one or the other; don't duplicate the work
+         # The reason for the kwargs check is that standard iterator passes in by
+@@ -569,6 +588,8 @@ class Model(metaclass=ModelBase):
+         return getattr(self, meta.pk.attname)
+ 
+     def _set_pk_val(self, value):
++        if self._state.adding and value is not None:
++            self._state.fields_cache['pk_set_explicitly'] = True
+         return setattr(self, self._meta.pk.attname, value)
+ 
+     pk = property(_get_pk_val, _set_pk_val)
+@@ -847,12 +868,14 @@ class Model(metaclass=ModelBase):
+         if not pk_set and (force_update or update_fields):
+             raise ValueError("Cannot force an update in save() with no primary key.")
+         updated = False
+-        # Skip an UPDATE when adding an instance and primary key has a default.
++        # Skip an UPDATE when adding an instance and primary key has a default,
++        # but only if the pk was not explicitly set.
+         if (
+             not force_insert and
+             self._state.adding and
+             self._meta.pk.default and
+-            self._meta.pk.default is not NOT_PROVIDED
++            self._meta.pk.default is not NOT_PROVIDED and
++            not self._state.fields_cache.get('pk_set_explicitly')
+         ):
+             force_insert = True
+         # If possible, try an UPDATE. If that doesn't update anything, do an INSERT.

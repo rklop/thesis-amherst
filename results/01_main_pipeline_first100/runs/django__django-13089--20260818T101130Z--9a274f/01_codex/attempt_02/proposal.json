@@ -1,0 +1,10 @@
+{
+  "test_name": "test_add_after_cull_removes_all_expired_entries",
+  "specification_gap": "Empty-result culling must remain safe when reached through the public add() API after expiration cleanup removes every existing row, not only through set() on an initially empty cache.",
+  "input_description": "Store two immediately expired entries in a database cache capped at one entry, then call add('fresh', 'value', timeout=1000).",
+  "expected_output": "add() returns True and get('fresh') returns 'value'; culling must not raise TypeError when its key-selection query returns no row.",
+  "expected_passing_candidate": "uncertain",
+  "why_interesting": "This uses a valid positive capacity and exercises an alternate public entry point. The candidates appear runtime-equivalent\u2014their only differences are quoting and call layout\u2014so both are expected to pass; forcing a split would require a formatting or source-introspection assertion.",
+  "test_patch": "diff --git a/tests/cache/tests.py b/tests/cache/tests.py\n--- a/tests/cache/tests.py\n+++ b/tests/cache/tests.py\n@@ -1021,6 +1021,18 @@ class DBCacheTests(BaseCacheTests, TransactionTestCase):\n     def drop_table(self):\n         with connection.cursor() as cursor:\n             table_name = connection.ops.quote_name('test cache table')\n             cursor.execute('DROP TABLE %s' % table_name)\n \n+    def test_add_after_cull_removes_all_expired_entries(self):\n+        cull_cache = caches['cull']\n+        old_max_entries = cull_cache._max_entries\n+        cull_cache._max_entries = 1\n+        try:\n+            cull_cache.set('expired-1', 'stale', timeout=0)\n+            cull_cache.set('expired-2', 'stale', timeout=0)\n+            self.assertIs(cull_cache.add('fresh', 'value', timeout=1000), True)\n+            self.assertEqual(cull_cache.get('fresh'), 'value')\n+        finally:\n+            cull_cache._max_entries = old_max_entries\n+\n     def test_get_many_num_queries(self):\n         cache.set_many({'a': 1, 'b': 2})\n",
+  "test_command": "cd /testbed && python tests/runtests.py cache.tests.DBCacheTests.test_add_after_cull_removes_all_expired_entries"
+}

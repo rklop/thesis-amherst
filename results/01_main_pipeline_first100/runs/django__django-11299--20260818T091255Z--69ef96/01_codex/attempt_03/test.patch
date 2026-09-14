@@ -1,0 +1,25 @@
+diff --git a/tests/constraints/tests.py b/tests/constraints/tests.py
+--- a/tests/constraints/tests.py
++++ b/tests/constraints/tests.py
+@@ -66,6 +66,20 @@ class CheckConstraintTests(TestCase):
+         self.assertEqual(path, 'django.db.models.CheckConstraint')
+         self.assertEqual(args, ())
+         self.assertEqual(kwargs, {'check': check, 'name': name})
++
++    def test_nested_check_constraint_sql_uses_unqualified_columns(self):
++        check = (
++            models.Q(
++                price__gt=models.F('discounted_price'),
++                color__isnull=False,
++            ) |
++            models.Q(price__isnull=True)
++        )
++        constraint = models.CheckConstraint(check=check, name='nested_check')
++        sql = constraint.constraint_sql(Product, connection.schema_editor())
++        qualified_table = '%s.' % connection.ops.quote_name(
++            Product._meta.db_table,
++        )
++        self.assertNotIn(qualified_table, sql)
+ 
+     @skipUnlessDBFeature('supports_table_check_constraints')
+     def test_database_constraint(self):

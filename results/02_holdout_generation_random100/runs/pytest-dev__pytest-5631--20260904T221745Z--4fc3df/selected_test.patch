@@ -1,0 +1,32 @@
+diff --git a/testing/python/test_mock_patch_shadowing.py b/testing/python/test_mock_patch_shadowing.py
+new file mode 100644
+index 000000000..8d94f1bd1
+--- /dev/null
++++ b/testing/python/test_mock_patch_shadowing.py
+@@ -0,0 +1,26 @@
++def test_stdlib_patch_ignores_unrelated_mock_module(testdir, monkeypatch):
++    testdir.makepyfile(
++        mock="""
++            unrelated = True
++        """,
++        test_uses_stdlib_mock="""
++            import os
++            import mock
++            from unittest.mock import patch
++
++            assert not hasattr(mock, "DEFAULT")
++
++            class Replacement:
++                def __eq__(self, other):
++                    raise AssertionError("replacement equality must not be evaluated")
++
++            replacement = Replacement()
++
++            @patch("os.getcwd", new=replacement)
++            def test_patched():
++                assert os.getcwd is replacement
++        """,
++    )
++    monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
++    result = testdir.runpytest_subprocess()
++    result.assert_outcomes(passed=1)

@@ -1,0 +1,10 @@
+{
+  "test_name": "TemplateViewTest.test_extra_context_overrides_url_kwargs",
+  "specification_gap": "When a deprecated URL keyword and TemplateView.extra_context use the same key, extra_context must retain ContextMixin's public merge precedence. Candidate A incorrectly reapplies URL kwargs after get_context_data(), overwriting extra_context; candidate B preserves the precedence.",
+  "input_description": "Invoke TemplateView through as_view() with URL kwarg foo='from-url' and extra_context={'foo': 'from-extra-context'}.",
+  "expected_output": "The returned TemplateResponse exposes response.context_data['foo'] == 'from-extra-context'.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises a documented public entry point and a key-collision boundary. It detects a general context-composition regression without asserting proxy implementation details. The unified diff was validated with git apply --check against the pristine repository.",
+  "test_patch": "diff --git a/tests/generic_views/test_base.py b/tests/generic_views/test_base.py\n--- a/tests/generic_views/test_base.py\n+++ b/tests/generic_views/test_base.py\n@@ -387,7 +387,18 @@ class TemplateViewTest(SimpleTestCase):\n \n     def test_extra_context(self):\n         response = self.client.get('/template/extra_context/')\n         self.assertEqual(response.context['title'], 'Title')\n+\n+    @ignore_warnings(category=RemovedInDjango40Warning)\n+    def test_extra_context_overrides_url_kwargs(self):\n+        view = TemplateView.as_view(\n+            template_name='generic_views/about.html',\n+            extra_context={'foo': 'from-extra-context'},\n+        )\n+        response = view(self.rf.get('/'), foo='from-url')\n+        self.assertEqual(\n+            response.context_data['foo'], 'from-extra-context',\n+        )\n \n \n @override_settings(ROOT_URLCONF='generic_views.urls')\n",
+  "test_command": "./tests/runtests.py generic_views.test_base.TemplateViewTest.test_extra_context_overrides_url_kwargs"
+}

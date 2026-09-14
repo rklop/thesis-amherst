@@ -1,0 +1,10 @@
+{
+  "test_name": "test_lookup_allowed_through_parent_link",
+  "specification_gap": "lookup_allowed() must preserve the concrete-inheritance shortcut: traversing a multi-table parent link to its primary key is not a new relational filter when that value is already stored by the administered model's foreign key.",
+  "input_description": "Create Person, its multi-table subclass Employee, and Badge with a ForeignKey to Employee. With no list_filter configured, call ModelAdmin.lookup_allowed(\"employee__person_ptr__id\", \"test_value\").",
+  "expected_output": "The method returns True because employee__person_ptr__id resolves to the same primary-key value already available through Badge.employee_id.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "Candidate B distinguishes concrete parent links from ordinary relation-valued primary keys. Candidate A counts every relational hop, so it incorrectly treats person_ptr as an additional restricted relation and returns False.",
+  "test_patch": "diff --git a/tests/modeladmin/tests.py b/tests/modeladmin/tests.py\n--- a/tests/modeladmin/tests.py\n+++ b/tests/modeladmin/tests.py\n@@ -153,6 +153,20 @@ class ModelAdminTests(TestCase):\n         self.assertIs(\n             ma.lookup_allowed(\"employee__department__code\", \"test_value\"), True\n         )\n+\n+    @isolate_apps(\"modeladmin\")\n+    def test_lookup_allowed_through_parent_link(self):\n+        class Person(models.Model):\n+            pass\n+\n+        class Employee(Person):\n+            pass\n+\n+        class Badge(models.Model):\n+            employee = models.ForeignKey(Employee, models.CASCADE)\n+\n+        ma = ModelAdmin(Badge, self.site)\n+        self.assertIs(\n+            ma.lookup_allowed(\"employee__person_ptr__id\", \"test_value\"), True\n+        )\n \n     def test_field_arguments(self):\n         # If fields is specified, fieldsets_add and fieldsets_change should\n",
+  "test_command": "python tests/runtests.py modeladmin.tests.ModelAdminTests.test_lookup_allowed_through_parent_link"
+}

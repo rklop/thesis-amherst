@@ -1,0 +1,10 @@
+{
+  "test_name": "test_identical_q_vla_file_with_unequal_row_lengths",
+  "specification_gap": "The existing tests do not directly cover FITSDiff comparing an on-disk file containing a 64-bit Q-descriptor VLA whose rows have different lengths. Finite values isolate Q-VLA handling from the unrelated NaN-equality behavior that invalidated the previous proposal.",
+  "input_description": "Create a binary-table FITS file with one QD column containing finite rows [0.0] and [0.0, 0.0], then compare that file to itself through the public FITSDiff entry point.",
+  "expected_output": "FITSDiff.identical is True; self-comparison must not report a data difference.",
+  "expected_passing_candidate": "uncertain",
+  "why_interesting": "This is the issue's core externally observable invariant and exercises serialization, Q descriptors, floating-point VLAs, and heterogeneous row lengths. Candidate A and candidate B make the same semantic one-line change; their only patch differences are diff metadata/context, so both are expected to pass and there is no evidence-based candidate split.",
+  "test_patch": "diff --git a/astropy/io/fits/tests/test_diff.py b/astropy/io/fits/tests/test_diff.py\n--- a/astropy/io/fits/tests/test_diff.py\n+++ b/astropy/io/fits/tests/test_diff.py\n@@ -418,6 +418,15 @@ class TestDiff(FitsTestCase):\n         assert diff.diff_ratio == 0\n         assert diff.diff_total == 0\n \n+    def test_identical_q_vla_file_with_unequal_row_lengths(self):\n+        column = Column(\n+            \"A\", format=\"QD\", array=[[0.0], [0.0, 0.0]]\n+        )\n+        filename = self.temp(\"identical_q_vla.fits\")\n+        BinTableHDU.from_columns([column]).writeto(filename)\n+\n+        assert FITSDiff(filename, filename).identical\n+\n     def test_diff_empty_tables(self):\n         \"\"\"\n         Regression test for https://aeon.stsci.edu/ssb/trac/pyfits/ticket/178\n",
+  "test_command": "cd /testbed && python -m pytest -q astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_q_vla_file_with_unequal_row_lengths"
+}

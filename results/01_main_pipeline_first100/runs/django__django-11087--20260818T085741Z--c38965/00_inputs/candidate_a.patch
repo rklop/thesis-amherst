@@ -1,0 +1,33 @@
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 3a462f1c4c..2e17f17d89 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -232,9 +232,27 @@ class Collector:
+         """
+         Get a QuerySet of objects related to `objs` via the relation `related`.
+         """
+-        return related.related_model._base_manager.using(self.using).filter(
++        model = related.related_model
++        qs = model._base_manager.using(self.using).filter(
+             **{"%s__in" % related.field.name: objs}
+         )
++        # If there are no signal listeners, only fetch the fields needed for
++        # deletion. We need the pk and any fields that are referenced by other
++        # models via foreign keys.
++        if not (signals.pre_delete.has_listeners(model) or
++                signals.post_delete.has_listeners(model)):
++            fields = [model._meta.pk.name]
++            # Find all foreign keys that reference this model and get their
++            # to_field values
++            for field in model._meta.get_fields(include_hidden=True):
++                if field.is_relation and hasattr(field, 'remote_field'):
++                    remote_field = field.remote_field
++                    if remote_field and hasattr(remote_field, 'to_fields') and remote_field.to_fields:
++                        for to_field in remote_field.to_fields:
++                            if to_field and to_field not in fields:
++                                fields.append(to_field)
++            qs = qs.only(*fields)
++        return qs
+ 
+     def instances_with_model(self):
+         for model, instances in self.data.items():

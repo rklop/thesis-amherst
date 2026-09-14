@@ -1,0 +1,60 @@
+diff --git a/tests/delete/tests.py b/tests/delete/tests.py
+--- a/tests/delete/tests.py
++++ b/tests/delete/tests.py
+@@ -1,3 +1,4 @@
++import sqlite3
+ from math import ceil
+ 
+ from django.db import IntegrityError, connection, models
+@@ -7,8 +8,8 @@
+ 
+ from .models import (
+     MR, A, Avatar, Base, Child, HiddenUser, HiddenUserProfile, M, M2MFrom,
+-    M2MTo, MRNull, Origin, Parent, R, RChild, RChildChild, Referrer, S, T,
+-    User, create_a, get_default_r,
++    M2MTo, MRNull, Origin, Parent, R, RChild, RChildChild, Referrer, S,
++    SecondReferrer, T, User, create_a, get_default_r,
+ )
+ 
+ 
+@@ -582,3 +583,40 @@ class FastDeleteTests(TestCase):
+                 User.objects.filter(avatar__desc='missing').delete(),
+                 (0, {'delete.User': 0})
+             )
++
++    def test_fast_delete_combined_relationships_parameter_limit(self):
++        if (
++            connection.vendor != 'sqlite' or
++            not hasattr(sqlite3.Connection, 'setlimit')
++        ):
++            self.skipTest('sqlite3.Connection.setlimit() is required.')
++
++        origin = Origin.objects.create()
++        max_query_params = connection.features.max_query_params
++        batch_size = connection.ops.bulk_batch_size(
++            ['referrer'], range(max_query_params)
++        )
++        Referrer.objects.bulk_create([
++            Referrer(origin=origin, unique_field=i, large_field='')
++            for i in range(batch_size)
++        ])
++        referrers = Referrer.objects.filter(origin=origin)
++        SecondReferrer.objects.bulk_create(
++            SecondReferrer(
++                referrer_id=referrer.pk,
++                other_referrer_id=referrer.unique_field,
++            )
++            for referrer in referrers
++        )
++
++        raw_connection = connection.connection
++        old_limit = raw_connection.setlimit(
++            sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, max_query_params
++        )
++        try:
++            deleted, _ = origin.delete()
++        finally:
++            raw_connection.setlimit(
++                sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, old_limit
++            )
++        self.assertEqual(deleted, 2 * batch_size + 1)

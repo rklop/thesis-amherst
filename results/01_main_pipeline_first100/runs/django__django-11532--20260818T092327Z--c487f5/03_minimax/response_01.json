@@ -1,0 +1,42 @@
+{
+  "id": "06d35815137cd8c5a892562fb085aa34",
+  "created": 1787045141,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n{\"rating\": \"high_signal\", \"confidence\": 0.95, \"summary\": \"The test successfully differentiates between two legitimate implementation approaches for handling non-ASCII hostnames in email Message-ID headers. Candidate A preserves ASCII hostnames unchanged (original behavior), while Candidate B unconditionally applies IDNA encoding which breaks valid ASCII hostnames exceeding 63 characters. The test correctly identifies this behavioral difference and has a defensible oracle based on the principle that the fix should only convert non-ASCII domains, not alter ASCII ones. Candidate A passes and appears more specification-conformant as it maintains backward compatibility.\", \"specification_signal\": [\"The test verifies that ASCII hostnames should be preserved unchanged by the fix\", \"This follows from the issue description which only asks for punycode conversion of non-ASCII domains, not modification of ASCII ones\", \"Backward compatibility for ASCII hostnames is a reasonable specification expectation\"], \"oracle_quality\": \"The test uses a valid edge case: a 64-character ASCII hostname exceeds IDNA's 63-character DNS label limit, causing Candidate B's unconditional punycode() call to fail while Candidate A's conditional approach succeeds. This is a genuine behavioral difference with a clear pass/fail oracle.\", \"concerns\": [\"The 64-character hostname is technically invalid according to DNS specifications (max 63 characters per label)\", \"However, this still represents a valid differentiation point showing Candidate B is more aggressive than necessary\"], \"human_review_questions\": [\"Is breaking valid ASCII hostnames that exceed 63 characters an acceptable trade-off for the fix?\", \"Should the fix only convert non-ASCII domains (Candidate A approach) or also normalize all domains via IDNA (Candidate B approach)?\"]}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this carefully.\n\nThe issue is about Email messages crashing when the hostname contains non-ASCII characters and the email encoding is non-unicode (like iso-8859-1). The fix should convert non-ASCII domain names to punycode.\n\nThe original test patch adds a test that:\n1. Mocks socket.getfqdn() to return '\u6f22\u5b57' (Chinese characters)\n2. Creates an EmailMessage with iso-8859-1 encoding\n3. Asserts that the Message-ID contains 'xn--p8s937b' (the punycode version)\n\nNow I have two candidate patches:\n\n**Candidate A** - Fixes in django/core/mail/utils.py only:\n- In CachedDnsName.get_fqdn(), it tries ASCII encoding first, and only falls back to IDNA for non-ASCII\n- This preserves ASCII hostnames as-is\n- Also includes the test in tests/mail/tests.py\n\n**Candidate B** - More comprehensive fix:\n- Adds a new punycode() function to django/utils/encoding.py\n- Uses punycode() in multiple places: message.py, utils.py, validators.py, html.py\n- In utils.py, it unconditionally calls punycode() on the fqdn\n- This could break ASCII hostnames that exceed 63 characters (the DNS label limit)\n\nThe generated test proposal tests:\n- A 64-character ASCII hostname (exceeds DNS label limit)\n- Candidate A passes (preserves it)\n- Candidate B fails (tries to encode it as IDNA, which raises UnicodeError)\n\nThe validated execution confirms:\n- candidate_a: PASSED (returncode=0)\n- candidate_b: FAILED (returncode=1, UnicodeError: label too long)\n\nNow I need to judge the quality of this differentiating test.\n\nLet me assess:\n\n1. **specification_signal**: The test is checking that ASCII hostnames are preserved unchanged. This is a valid specification concern - the fix should only convert non-ASCII to punycode, not touch ASCII hostnames. \n\nThe RFC provides clear guidance on domain encoding. While some might argue 64-character hostnames are invalid, the core issue is that the fix shouldn't unnecessarily transform ASCII hostnames. The test correctly identifies an implementation difference: Candidate A preserves existing behavior, while Candidate B introduces a more aggressive encoding approach.\n\nThe test's design reveals subtle implementation choices between the two candidates. It effectively exposes how each approach handles edge cases in hostname processing, particularly around ASCII domain encoding.\n",
+        "provider_specific_fields": {
+          "audio_content": "",
+          "name": "MiniMax AI"
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 862,
+    "prompt_tokens": 4026,
+    "total_tokens": 4888,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

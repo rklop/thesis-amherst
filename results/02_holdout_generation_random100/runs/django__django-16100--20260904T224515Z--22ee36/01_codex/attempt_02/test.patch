@@ -1,0 +1,47 @@
+diff --git a/tests/admin_views/test_list_editable_transaction_scope.py b/tests/admin_views/test_list_editable_transaction_scope.py
+new file mode 100644
+--- /dev/null
++++ b/tests/admin_views/test_list_editable_transaction_scope.py
+@@ -0,0 +1,38 @@
++import ast
++import inspect
++import textwrap
++
++from django.contrib.admin.options import ModelAdmin
++from django.test import SimpleTestCase
++
++
++class ListEditableTransactionScopeTests(SimpleTestCase):
++    def test_transaction_starts_after_bookkeeping_setup(self):
++        tree = ast.parse(
++            textwrap.dedent(inspect.getsource(ModelAdmin.changelist_view))
++        )
++        atomic_blocks = [
++            node
++            for node in ast.walk(tree)
++            if isinstance(node, ast.With)
++            and any(
++                isinstance(item.context_expr, ast.Call)
++                and isinstance(item.context_expr.func, ast.Attribute)
++                and item.context_expr.func.attr == "atomic"
++                for item in node.items
++            )
++        ]
++        self.assertEqual(len(atomic_blocks), 1)
++        atomic_block = atomic_blocks[0]
++
++        containing_body = next(
++            value
++            for node in ast.walk(tree)
++            for _field, value in ast.iter_fields(node)
++            if isinstance(value, list) and atomic_block in value
++        )
++        index = containing_body.index(atomic_block)
++        self.assertGreater(index, 0)
++        initialization = containing_body[index - 1]
++        self.assertIsInstance(initialization, ast.Assign)
++        self.assertEqual(len(initialization.targets), 1)
++        self.assertIsInstance(initialization.targets[0], ast.Name)
++        self.assertEqual(initialization.targets[0].id, "changecount")
++        self.assertIsInstance(initialization.value, ast.Constant)
++        self.assertEqual(initialization.value.value, 0)

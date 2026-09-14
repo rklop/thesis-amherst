@@ -1,0 +1,23 @@
+diff --git a/tests/cache/tests.py b/tests/cache/tests.py
+--- a/tests/cache/tests.py
++++ b/tests/cache/tests.py
+@@ -1021,6 +1021,18 @@ class DBCacheTests(BaseCacheTests, TransactionTestCase):
+     def drop_table(self):
+         with connection.cursor() as cursor:
+             table_name = connection.ops.quote_name('test cache table')
+             cursor.execute('DROP TABLE %s' % table_name)
+ 
++    def test_add_after_cull_removes_all_expired_entries(self):
++        cull_cache = caches['cull']
++        old_max_entries = cull_cache._max_entries
++        cull_cache._max_entries = 1
++        try:
++            cull_cache.set('expired-1', 'stale', timeout=0)
++            cull_cache.set('expired-2', 'stale', timeout=0)
++            self.assertIs(cull_cache.add('fresh', 'value', timeout=1000), True)
++            self.assertEqual(cull_cache.get('fresh'), 'value')
++        finally:
++            cull_cache._max_entries = old_max_entries
++
+     def test_get_many_num_queries(self):
+         cache.set_many({'a': 1, 'b': 2})

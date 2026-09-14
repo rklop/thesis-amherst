@@ -1,0 +1,10 @@
+{
+  "test_name": "test_decode_unsigned_false_as_signed_byte",
+  "specification_gap": "The public xr.decode_cf entry point should reinterpret unsigned byte storage as signed when _Unsigned is \"false\", and it must reinterpret _FillValue before masking so the signed fill value is still recognized.",
+  "input_description": "A uint8 variable containing [128, 255, 0, 127] with _Unsigned=\"false\" and _FillValue=255.",
+  "expected_output": "Decoding produces float32 values [-128, NaN, 0, 127].",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises signed-byte reinterpretation and fill-value masking through a public entry point. However, the executable hunks in candidate A and candidate B are byte-for-byte identical; they differ only in non-semantic diff metadata. Consequently, this defensible test will pass both candidates, and no valid candidate-B-pass/candidate-A-fail test exists for the supplied patches.",
+  "test_patch": "diff --git a/xarray/tests/test_coding.py b/xarray/tests/test_coding.py\n--- a/xarray/tests/test_coding.py\n+++ b/xarray/tests/test_coding.py\n@@ -14,6 +14,20 @@ with suppress(ImportError):\n     import dask.array as da\n \n \n+def test_decode_unsigned_false_as_signed_byte():\n+    encoded = xr.Variable(\n+        (\"x\",),\n+        np.array([128, 255, 0, 127], dtype=\"uint8\"),\n+        {\"_Unsigned\": \"false\", \"_FillValue\": 255},\n+    )\n+\n+    decoded = xr.decode_cf(encoded.to_dataset(name=\"x\"))[\"x\"]\n+\n+    assert decoded.dtype == np.float32\n+    np.testing.assert_allclose(decoded.values, [-128, np.nan, 0, 127])\n+\n+\n def test_CFMaskCoder_decode():\n     original = xr.Variable((\"x\",), [0, -1, 1], {\"_FillValue\": -1})\n     expected = xr.Variable((\"x\",), [0, np.nan, 1])\n",
+  "test_command": "python -m pytest -q xarray/tests/test_coding.py::test_decode_unsigned_false_as_signed_byte"
+}

@@ -1,0 +1,34 @@
+diff --git a/lib/matplotlib/tests/test_pickle.py b/lib/matplotlib/tests/test_pickle.py
+--- a/lib/matplotlib/tests/test_pickle.py
++++ b/lib/matplotlib/tests/test_pickle.py
+@@ -261,6 +261,28 @@ def test_unpickle_canvas():
+     assert fig2.canvas is not None
+ 
+ 
++def test_unpickle_draggable_annotation_remains_interactive():
++    from matplotlib.backend_bases import MouseButton, MouseEvent
++
++    fig, ax = plt.subplots()
++    annotation = ax.annotate(
++        "drag me", (0.5, 0.5), ha="center", va="center")
++    annotation.draggable()
++
++    fig = pickle.loads(pickle.dumps(fig))
++    annotation = fig.axes[0].texts[0]
++    fig.canvas.draw()
++    start = annotation.get_transform().transform(annotation.xyann)
++    end = start + [20, 10]
++
++    MouseEvent("button_press_event", fig.canvas, *start,
++               MouseButton.LEFT)._process()
++    MouseEvent("motion_notify_event", fig.canvas, *end)._process()
++    MouseEvent("button_release_event", fig.canvas, *end,
++               MouseButton.LEFT)._process()
++
++    np.testing.assert_allclose(
++        annotation.get_transform().transform(annotation.xyann), end)
++
++
+ def test_mpl_toolkits():
+     ax = parasite_axes.host_axes([0, 0, 1, 1])
+     assert type(pickle.loads(pickle.dumps(ax))) == parasite_axes.HostAxes

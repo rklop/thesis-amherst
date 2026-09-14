@@ -1,0 +1,66 @@
+diff --git a/tests/delete/models.py b/tests/delete/models.py
+--- a/tests/delete/models.py
++++ b/tests/delete/models.py
+@@ -126,3 +126,29 @@ class Base(models.Model):
+ 
+ class RelToBase(models.Model):
+     base = models.ForeignKey(Base, models.DO_NOTHING)
++
++
++class BaseManagerParent(models.Model):
++    pass
++
++
++class BaseManagerRelated(models.Model):
++    pass
++
++
++class SelectRelatedManager(models.Manager):
++    def get_queryset(self):
++        return super().get_queryset().select_related('related')
++
++
++class BaseManagerChild(models.Model):
++    parent = models.ForeignKey(BaseManagerParent, models.CASCADE)
++    related = models.ForeignKey(BaseManagerRelated, models.DO_NOTHING)
++    objects = SelectRelatedManager()
++
++    class Meta:
++        base_manager_name = 'objects'
++
++
++class BaseManagerGrandchild(models.Model):
++    child = models.ForeignKey(BaseManagerChild, models.CASCADE)
+diff --git a/tests/delete/tests.py b/tests/delete/tests.py
+--- a/tests/delete/tests.py
++++ b/tests/delete/tests.py
+@@ -6,8 +6,10 @@ from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
+ 
+ from .models import (
+-    MR, A, Avatar, Base, Child, HiddenUser, HiddenUserProfile, M, M2MFrom,
+-    M2MTo, MRNull, Parent, R, RChild, S, T, User, create_a, get_default_r,
++    MR, A, Avatar, Base, BaseManagerChild, BaseManagerGrandchild,
++    BaseManagerParent, BaseManagerRelated, Child, HiddenUser, HiddenUserProfile,
++    M, M2MFrom, M2MTo, MRNull, Parent, R, RChild, S, T, User, create_a,
++    get_default_r,
+ )
+ 
+ 
+@@ -436,6 +438,18 @@ class DeletionTests(TestCase):
+         with self.assertNumQueries(2):
+             avatar.delete()
+ 
++    def test_select_related_base_manager(self):
++        parent = BaseManagerParent.objects.create()
++        related = BaseManagerRelated.objects.create()
++        child = BaseManagerChild.objects.create(parent=parent, related=related)
++        BaseManagerGrandchild.objects.create(child=child)
++
++        self.assertEqual(parent.delete()[0], 3)
++        self.assertFalse(BaseManagerParent.objects.exists())
++        self.assertFalse(BaseManagerChild.objects.exists())
++        self.assertFalse(BaseManagerGrandchild.objects.exists())
++        self.assertTrue(BaseManagerRelated.objects.exists())
++
+ 
+ class FastDeleteTests(TestCase):

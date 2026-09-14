@@ -1,0 +1,43 @@
+diff --git a/lib/matplotlib/offsetbox.py b/lib/matplotlib/offsetbox.py
+index 1dee8a23d9..24c36cfc9e 100644
+--- a/lib/matplotlib/offsetbox.py
++++ b/lib/matplotlib/offsetbox.py
+@@ -1514,6 +1514,38 @@ class DraggableBase:
+                 'button_release_event', self.on_release),
+         ]
+ 
++    def __getstate__(self):
++        d = self.__dict__.copy()
++        # Cannot pickle canvas callbacks, so we must drop them and
++        # re-register on load
++        d["cids"] = []
++        d["canvas"] = None
++        # _c1 is a motion callback and may not exist
++        d.pop("_c1", None)
++        # background is also unpicklable
++        d.pop("background", None)
++        return d
++
++    def __setstate__(self, state):
++        self.__dict__.update(state)
++        # Re-register callbacks on the new canvas
++        # The figure may not be set yet on the ref_artist, so we
++        # get it from axes if needed
++        if hasattr(self.ref_artist, "figure") and self.ref_artist.figure is not None:
++            figure = self.ref_artist.figure
++        elif hasattr(self.ref_artist, "axes") and self.ref_artist.axes is not None:
++            figure = self.ref_artist.axes.figure
++        else:
++            # Cannot find figure, leave canvas as None
++            return
++        self.canvas = figure.canvas
++        self.cids = [
++            self.canvas.callbacks._connect_picklable(
++                'pick_event', self.on_pick),
++            self.canvas.callbacks._connect_picklable(
++                'button_release_event', self.on_release),
++        ]
++
+     def on_motion(self, evt):
+         if self._check_still_parented() and self.got_artist:
+             dx = evt.x - self.mouse_x

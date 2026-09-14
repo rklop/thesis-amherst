@@ -1,0 +1,10 @@
+{
+  "test_name": "test_foreign_key_invalid_model_reference",
+  "specification_gap": "String model references have exactly two components: `app_label.ModelName`. The candidates disagree on whether `ForeignKey.deconstruct()` should reject a reference containing an additional dot or silently interpret everything before the final dot as an app label.",
+  "input_description": "Construct a standalone `ForeignKey` targeting the malformed three-component string `package.MixedApp.ModelName`, then call the public migration-serialization method `deconstruct()`.",
+  "expected_output": "`deconstruct()` raises `ValueError`; no particular exception text is required.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises an arity boundary in the syntax changed by the fix. Candidate A's `rsplit('.', 1)` accepts the malformed reference, while candidate B's exact two-part split rejects it. Exact rejection is consistent with Django's documented `app_label.ModelName` grammar and `make_model_tuple()` invariant.",
+  "test_patch": "diff --git a/tests/field_deconstruction/tests.py b/tests/field_deconstruction/tests.py\n--- a/tests/field_deconstruction/tests.py\n+++ b/tests/field_deconstruction/tests.py\n@@ -193,6 +193,11 @@ class FieldDeconstructionTests(SimpleTestCase):\n         self.assertEqual(args, [])\n         self.assertEqual(kwargs, {})\n \n+    def test_foreign_key_invalid_model_reference(self):\n+        field = models.ForeignKey(\"package.MixedApp.ModelName\", models.CASCADE)\n+        with self.assertRaises(ValueError):\n+            field.deconstruct()\n+\n     def test_foreign_key(self):\n         # Test basic pointing\n         from django.contrib.auth.models import Permission\n",
+  "test_command": "cd /testbed && python tests/runtests.py field_deconstruction.FieldDeconstructionTests.test_foreign_key_invalid_model_reference"
+}

@@ -1,0 +1,38 @@
+diff --git a/tests/dbshell/test_postgresql.py b/tests/dbshell/test_postgresql.py
+--- a/tests/dbshell/test_postgresql.py
++++ b/tests/dbshell/test_postgresql.py
+@@ -81,6 +81,34 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
+             )
+         )
+ 
++    def test_ssl_options_override_libpq_environment(self):
++        configured = {
++            'sslmode': 'verify-full',
++            'sslrootcert': 'configured-root.crt',
++            'sslcert': 'configured-client.crt',
++            'sslkey': 'configured-client.key',
++        }
++        inherited = {
++            'PGSSLMODE': 'disable',
++            'PGSSLROOTCERT': 'inherited-root.crt',
++            'PGSSLCERT': 'inherited-client.crt',
++            'PGSSLKEY': 'inherited-client.key',
++        }
++        with mock.patch.dict(os.environ, inherited, clear=True), \
++                mock.patch('subprocess.run') as subprocess_run:
++            DatabaseClient.runshell_db(configured)
++
++        child_env = subprocess_run.call_args[1]['env']
++        self.assertEqual(
++            {name: child_env[name] for name in inherited},
++            {
++                'PGSSLMODE': 'verify-full',
++                'PGSSLROOTCERT': 'configured-root.crt',
++                'PGSSLCERT': 'configured-client.crt',
++                'PGSSLKEY': 'configured-client.key',
++            },
++        )
++
+     def test_sigint_handler(self):
+         """SIGINT is ignored in Python and passed to psql to abort quries."""
+         def _mock_subprocess_run(*args, **kwargs):

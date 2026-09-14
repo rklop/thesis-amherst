@@ -1,0 +1,65 @@
+diff --git a/tests/delete/models.py b/tests/delete/models.py
+--- a/tests/delete/models.py
++++ b/tests/delete/models.py
+@@ -126,3 +126,26 @@ class Base(models.Model):
+ 
+ class RelToBase(models.Model):
+     base = models.ForeignKey(Base, models.DO_NOTHING)
++
++
++class SelectRelatedManager(models.Manager):
++    def get_queryset(self):
++        return super().get_queryset().select_related('origin')
++
++
++class SelectRelatedOrigin(models.Model):
++    pass
++
++
++class SelectRelatedChild(models.Model):
++    origin = models.ForeignKey(SelectRelatedOrigin, models.CASCADE)
++    payload = models.TextField()
++
++    objects = SelectRelatedManager()
++
++    class Meta:
++        base_manager_name = 'objects'
++
++
++class SelectRelatedGrandchild(models.Model):
++    child = models.ForeignKey(SelectRelatedChild, models.CASCADE)
+diff --git a/tests/delete/tests.py b/tests/delete/tests.py
+--- a/tests/delete/tests.py
++++ b/tests/delete/tests.py
+@@ -7,7 +7,9 @@ from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
+ 
+ from .models import (
+     MR, A, Avatar, Base, Child, HiddenUser, HiddenUserProfile, M, M2MFrom,
+-    M2MTo, MRNull, Parent, R, RChild, S, T, User, create_a, get_default_r,
++    M2MTo, MRNull, Parent, R, RChild, S, SelectRelatedChild,
++    SelectRelatedGrandchild, SelectRelatedOrigin, T, User, create_a,
++    get_default_r,
+ )
+ 
+ 
+@@ -437,6 +439,20 @@ class DeletionTests(TestCase):
+         with self.assertNumQueries(2):
+             avatar.delete()
+ 
++    def test_cascade_with_select_related_base_manager(self):
++        origin = SelectRelatedOrigin.objects.create()
++        child = SelectRelatedChild.objects.create(
++            origin=origin,
++            payload='unused during deletion',
++        )
++        SelectRelatedGrandchild.objects.create(child=child)
++
++        origin.delete()
++
++        self.assertFalse(SelectRelatedOrigin.objects.exists())
++        self.assertFalse(SelectRelatedChild.objects.exists())
++        self.assertFalse(SelectRelatedGrandchild.objects.exists())
++
+ 
+ class FastDeleteTests(TestCase):
+ 

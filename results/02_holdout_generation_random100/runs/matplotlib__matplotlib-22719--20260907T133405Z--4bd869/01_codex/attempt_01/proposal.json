@@ -1,0 +1,10 @@
+{
+  "test_name": "test_empty_plot_does_not_report_numlike_categories",
+  "specification_gap": "Empty categorical data must not be classified as a list of strings that are all parsable as numbers or dates. Candidate A suppresses the deprecation warning but still emits this misleading informational log from UnitData.update; candidate B also guards that empty-data path.",
+  "input_description": "Initialize an x-axis with categorical units, then call the public Axes.plot entry point with empty x and y lists while capturing INFO records from matplotlib.category.",
+  "expected_output": "The call returns one empty line artist and emits no categorical INFO record claiming that the input strings are parsable as numbers or dates.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the same empty-input boundary through the reported public plotting API, but detects a second vacuous-truth bug beyond the deprecation warning. It checks the presence of misleading output without depending on exact log wording.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_category.py b/lib/matplotlib/tests/test_category.py\n--- a/lib/matplotlib/tests/test_category.py\n+++ b/lib/matplotlib/tests/test_category.py\n@@ -125,6 +125,15 @@ class TestStrCategoryConverter:\n     def test_default_units(self):\n         assert isinstance(self.cc.default_units([\"a\"], self.ax), cat.UnitData)\n \n \n+def test_empty_plot_does_not_report_numlike_categories(caplog):\n+    ax = plt.figure().subplots()\n+    ax.xaxis.update_units([\"category\"])\n+    caplog.clear()\n+    with caplog.at_level(\"INFO\", logger=\"matplotlib.category\"):\n+        lines = ax.plot([], [])\n+    assert len(lines) == 1\n+    assert not any(r.name == \"matplotlib.category\" for r in caplog.records)\n+\n+\n PLOT_LIST = [Axes.scatter, Axes.plot, Axes.bar]\n PLOT_IDS = [\"scatter\", \"plot\", \"bar\"]\n",
+  "test_command": "python -m pytest -q lib/matplotlib/tests/test_category.py::test_empty_plot_does_not_report_numlike_categories"
+}

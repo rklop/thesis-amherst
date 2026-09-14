@@ -1,0 +1,42 @@
+{
+  "id": "06d35d3a622c0879ecfab039d16eba86",
+  "created": 1787046458,
+  "model": "MiniMax-M2.5",
+  "object": "chat.completion",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "\n\n{\"rating\": \"high_signal\", \"confidence\": 0.95, \"summary\": \"The test validates that combined fast-delete queries must preserve backend parameter-limit batching, a critical invariant of the deletion system. Candidate A fails by collapsing all predicates into one oversized DELETE statement (1 query instead of 2), violating batching limits. Candidate B correctly groups relationship fields before calculating batch size, producing the expected number of safe combined DELETE statements (2 batches). The test targets genuine specification requirements derived from the issue's goal of combining queries while maintaining existing system invariants.\", \"specification_signal\": [\"The issue explicitly requests combining DELETE queries for multiple FK columns pointing to the same table\", \"The issue example shows combining predicates like 'WHERE created_by_id = :id OR updated_by = :id'\", \"Batching is a fundamental invariant of the deletion system that must be preserved regardless of query combination\", \"The test verifies this invariant is maintained when combining queries with different FK columns\"], \"oracle_quality\": [\"The oracle (expecting 2 batches) is derived from the batching invariant - SQLite has a 499 parameter limit per query\", \"The test counts actual DELETE statements against the expected batch count calculated from connection.ops.bulk_batch_size\", \"The expected deletion count (1001 total) validates correct data removal\", \"This oracle is supported by the API contract of the deletion system - batching exists to prevent parameter limit violations\"], \"concerns\": [\"Test is specific to SQLite's parameter limit (499) - may behave differently on other databases with different limits\", \"The test relies on internal batching calculation details\", \"The 500/499 threshold is somewhat arbitrary but reflects real backend constraints\"], \"human_review_questions\": [\"Should the batching behavior be explicitly documented as part of the 'combine fast delete queries' feature?\", \"Are there other database backends that might have different batching behavior that should also be tested?\", \"Is the 499 parameter limit a hard guarantee or just a default that could vary?\"]}",
+        "role": "assistant",
+        "tool_calls": null,
+        "function_call": null,
+        "reasoning_content": "\nLet me analyze this test case carefully.\n\nThe issue is about combining fast delete queries in Django's deletion.Collector to reduce database roundtrips when multiple foreign keys point to the same table.\n\nThe original test patch (test_fast_delete_combined_relationships) tests that:\n1. When deleting a Referrer that has two different FK columns (referrer_id and unique_field) pointing to the same Origin\n2. The deletion should be combined into fewer queries\n\nThe generated test proposal (test_fast_delete_combined_relationships_respects_batch_size) tests:\n1. That combining fast-delete predicates must preserve backend parameter-limit batching\n2. When there are 500 Referrer rows and 500 SecondReferrer rows (both referencing the same Referrer)\n3. Deleting the Origin should result in proper batching\n4. For SQLite, 500 objects fit in each one-column batch but exceed the 499-object limit when combined\n\nNow let me look at the execution results:\n\n**candidate_a**: FAILED - got 1 DELETE query instead of expected 2 batches\n**candidate_b**: PASSED - got 2 DELETE queries as expected\n\nSo candidate_a combines the queries but loses the batching invariant. Candidate_b properly handles batching.\n\nLet me analyze the quality of this test:\n\n1. **specification_signal**: The test targets a specific requirement from the issue - combining fast delete queries. However, it adds an additional constraint about batching that wasn't explicitly mentioned in the original issue. The issue was about combining queries like:\n   - `DELETE FROM person_friends WHERE from_id = :id OR to_id = :id`\n   \n   But it didn't explicitly discuss batching. However, preserving batching is a reasonable implicit requirement since it's a fundamental invariant of the deletion system.\n\n2. **oracle_quality**: The oracle (expecting 2 batches of DELETE statements) is based on:\n   - The expected behavior of the deletion system to maintain batching\n   - The specific SQLite parameter limit\n   - This is a reasonable specification derived from the API contract\n\n3. **concerns**: \n   - The test is specific to SQLite's parameter limits (499 objects)\n   - It relies on implementation details of batching\n   - But these are legitimate specification requirements that any solution should handle\n\nThe test validates that candidate_b correctly preserves batching while combining queries, while candidate_a fails this invariant. This is a legitimate specification requirement - the deletion system must maintain batching limits regardless of query combination. The test is well-designed to catch this subtle but important behavior.\n",
+        "provider_specific_fields": {
+          "name": "MiniMax AI",
+          "audio_content": ""
+        }
+      },
+      "provider_specific_fields": {}
+    }
+  ],
+  "usage": {
+    "completion_tokens": 912,
+    "prompt_tokens": 5951,
+    "total_tokens": 6863,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": null,
+    "total_characters": 0
+  },
+  "input_sensitive": false,
+  "output_sensitive": false,
+  "input_sensitive_type": 0,
+  "output_sensitive_type": 0,
+  "output_sensitive_int": 0,
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

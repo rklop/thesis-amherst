@@ -1,0 +1,10 @@
+{
+  "test_name": "test_property_subclass_behavior_is_preserved",
+  "specification_gap": "Inheriting a docstring must not replace a custom property subclass and thereby change the property's observable behavior. Candidate A reconstructs every property as a plain built-in property, while candidate B updates the existing descriptor.",
+  "input_description": "Define a property subclass whose __get__ adds one to the getter result. A base class returns 10 and documents the property; an overriding subclass returns 20 without a docstring.",
+  "expected_output": "Subclass.value.__doc__ is \"The documented value.\", and Subclass().value is 21 because the overriding custom property behavior remains active.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "The issue requires docstring inheritance for properties, but that metadata operation should preserve the semantics of property subclasses. The test uses only public class and attribute access and catches Candidate A's behavior-changing descriptor replacement.",
+  "test_patch": "diff --git a/astropy/utils/tests/test_inherit_docstrings_property.py b/astropy/utils/tests/test_inherit_docstrings_property.py\nnew file mode 100644\n--- /dev/null\n+++ b/astropy/utils/tests/test_inherit_docstrings_property.py\n@@ -0,0 +1,23 @@\n+from astropy.utils.misc import InheritDocstrings\n+\n+\n+def test_property_subclass_behavior_is_preserved():\n+    class IncrementedProperty(property):\n+        def __get__(self, instance, owner=None):\n+            if instance is None:\n+                return self\n+            return super().__get__(instance, owner) + 1\n+\n+    class Base(metaclass=InheritDocstrings):\n+        @IncrementedProperty\n+        def value(self):\n+            \"\"\"The documented value.\"\"\"\n+            return 10\n+\n+    class Subclass(Base):\n+        @IncrementedProperty\n+        def value(self):\n+            return 20\n+\n+    assert Subclass.value.__doc__ == \"The documented value.\"\n+    assert Subclass().value == 21\n",
+  "test_command": "cd /testbed && python -m pytest -q astropy/utils/tests/test_inherit_docstrings_property.py"
+}

@@ -1,0 +1,111 @@
+diff --git a/sympy/sets/handlers/intersection.py b/sympy/sets/handlers/intersection.py
+index c54dc8f72a..d0af494137 100644
+--- a/sympy/sets/handlers/intersection.py
++++ b/sympy/sets/handlers/intersection.py
+@@ -1,4 +1,4 @@
+-from sympy import (S, Dummy, Lambda, symbols, Interval, Intersection, Set,
++from sympy import (S, Dummy, Lambda, symbols, Interval, Intersection, Set, factor, expand,
+                    EmptySet, FiniteSet, Union, ComplexRegion, Mul)
+ from sympy.multipledispatch import dispatch
+ from sympy.sets.conditionset import ConditionSet
+@@ -278,7 +278,9 @@ def intersection_sets(self, other): # noqa:F811
+ 
+     if other == S.Reals:
+         from sympy.core.function import expand_complex
++        from sympy import simplify
+         from sympy.solvers.solvers import denoms, solve_linear
++        from sympy.solvers.solveset import solveset
+         from sympy.core.relational import Eq
+         f = self.lamda.expr
+         n = self.lamda.variables[0]
+@@ -291,7 +293,11 @@ def intersection_sets(self, other): # noqa:F811
+ 
+         re = re.subs(n_, n)
+         im = im.subs(n_, n)
++        # Use solveset to find integer solutions for im = 0
++        # This avoids issues with factor() removing factors
+         ifree = im.free_symbols
++        # Check if re == n before creating Lambda
++        re_is_n = (re == n)
+         lam = Lambda(n, re)
+         if im.is_zero:
+             # allow re-evaluation
+@@ -303,20 +309,70 @@ def intersection_sets(self, other): # noqa:F811
+         elif ifree != {n}:
+             return None
+         else:
+-            # univarite imaginary part in same variable
+-            x, xis = zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols])
+-            if x and all(i == n for i in x):
+-                base_set -= FiniteSet(xis)
++            # 
++            # Use numerator to avoid issues with fractions
++            from sympy import fraction
++            num, den = fraction(im)
++            # Solve numerator = 0 to find where im = 0
++            im_solutions = solveset(Eq(num, 0), n, S.Integers)
++            if im_solutions.is_FiniteSet:
++                # Filter to keep only integer solutions
++                integer_solutions = list(im_solutions)
++                if integer_solutions:
++                    # First intersect with base_set
++                    integer_solutions_in_base = base_set.intersection(FiniteSet(*integer_solutions))
++                    if integer_solutions_in_base.is_FiniteSet:
++                        # Check if denominators have n
++                        denominators_with_n = [d for d in denoms(f) if d.has(n)]
++                        
++                        if denominators_with_n:
++                            # Filter out solutions that make denominators zero
++                            valid_solutions = []
++                            for sol in integer_solutions_in_base:
++                                is_valid = True
++                                for denom in denominators_with_n:
++                                    try:
++                                        if denom.subs(n, sol) == 0:
++                                            is_valid = False
++                                            break
++                                    except:
++                                        pass
++                                if is_valid:
++                                    valid_solutions.append(sol)
++                            
++                            if valid_solutions:
++                                # Pass original solutions to imageset, not computed values
++                                return imageset(lam, FiniteSet(*valid_solutions))
++                            else:
++                                return S.EmptySet
++                        else:
++                            # No denominators with n, can return FiniteSet
++                            if re_is_n:
++                                values = [re.subs(n, sol) for sol in integer_solutions_in_base]
++                                base_set = FiniteSet(*values)
++                            else:
++                                # Keep ImageSet representation
++                                base_set = ConditionSet(n, Eq(expand(im), 0), S.Integers)
++                    else:
++                        # Can't handle non-finite sets here
++                        return
++                else:
++                    # No integer solutions, return empty set
++                    return S.EmptySet
+             else:
+-                base_set -= ConditionSet(n, Eq(im, 0), S.Integers)
++                # Can't solve exactly, use ConditionSet
++                base_set = base_set.intersection(ConditionSet(n, Eq(im, 0), S.Integers))
+         # exclude values that make denominators 0
+         for i in denoms(f):
+             if i.has(n):
+-                sol = list(zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols]))
++                sol = list(zip(*[solve_linear(j, 0) for j in Mul.make_args(i) if n in j.free_symbols]))
+                 if sol != []:
+                     x, xis = sol
+-                    if x and all(i == n for i in x):
+-                        base_set -= FiniteSet(xis)
++                    if x and all(j == n for j in x):
++                        base_set -= FiniteSet(*xis)
++                    else:
++                        # use solveset for non-linear denominators
++                        base_set -= solveset(Eq(i, 0), n, S.Integers)
+                 else:
+                     base_set -= ConditionSet(n, Eq(i, 0), S.Integers)
+         return imageset(lam, base_set)

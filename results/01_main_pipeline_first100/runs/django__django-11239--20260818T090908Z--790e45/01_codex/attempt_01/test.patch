@@ -1,0 +1,32 @@
+diff --git a/tests/dbshell/test_postgresql.py b/tests/dbshell/test_postgresql.py
+--- a/tests/dbshell/test_postgresql.py
++++ b/tests/dbshell/test_postgresql.py
+@@ -81,6 +81,27 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
+             )
+         )
+ 
++    def test_ssl_client_credentials_via_public_runshell(self):
++        class Connection:
++            def get_connection_params(self):
++                return {
++                    'database': 'dbname',
++                    'sslcert': 'client.crt',
++                    'sslkey': 'client.key',
++                }
++
++        with mock.patch.dict(os.environ, {}, clear=True), \
++                mock.patch('subprocess.run') as subprocess_run:
++            DatabaseClient(Connection()).runshell()
++
++        subprocess_run.assert_called_once_with(
++            ['psql', 'dbname'],
++            check=True,
++            env={
++                'PGSSLCERT': 'client.crt',
++                'PGSSLKEY': 'client.key',
++            },
++        )
++
+     def test_sigint_handler(self):
+         """SIGINT is ignored in Python and passed to psql to abort quries."""
+         def _mock_subprocess_run(*args, **kwargs):

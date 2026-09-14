@@ -1,0 +1,38 @@
+diff --git a/tests/model_formsets/tests.py b/tests/model_formsets/tests.py
+--- a/tests/model_formsets/tests.py
++++ b/tests/model_formsets/tests.py
+@@ -506,6 +506,33 @@ class ModelFormsetTest(TestCase):
+         AuthorFormSet = modelformset_factory(Author, fields='__all__', formset=BaseAuthorFormSet)
+         formset = AuthorFormSet()
+         self.assertEqual(len(formset.get_queryset()), 1)
+ 
++    def test_edit_only_skips_custom_save_new_objects(self):
++        class CustomAuthorFormSet(BaseModelFormSet):
++            def save_new_objects(self, commit=True):
++                self.new_objects = [
++                    self.save_new(form, commit=commit)
++                    for form in self.extra_forms
++                    if form.has_changed()
++                ]
++                return self.new_objects
++
++        AuthorFormSet = modelformset_factory(
++            Author,
++            fields='__all__',
++            formset=CustomAuthorFormSet,
++            edit_only=True,
++        )
++        data = {
++            'form-TOTAL_FORMS': '1',
++            'form-INITIAL_FORMS': '0',
++            'form-MAX_NUM_FORMS': '',
++            'form-0-name': 'Ada Lovelace',
++        }
++        formset = AuthorFormSet(data)
++        self.assertTrue(formset.is_valid())
++        self.assertEqual(formset.save(), [])
++        self.assertFalse(Author.objects.exists())
++
+     def test_model_inheritance(self):
+         BetterAuthorFormSet = modelformset_factory(BetterAuthor, fields="__all__")
+         formset = BetterAuthorFormSet()

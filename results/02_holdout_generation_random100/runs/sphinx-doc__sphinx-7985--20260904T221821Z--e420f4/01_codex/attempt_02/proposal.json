@@ -1,0 +1,10 @@
+{
+  "test_name": "test_unsupported_hierarchical_uri_is_unchecked",
+  "specification_gap": "Local-link checking must not classify a URI with an explicit unsupported network scheme as a source-tree path. Candidate B recognizes the `scheme://...` boundary; candidate A does not.",
+  "input_description": "A Sphinx document containing one explicit reference to `ssh://example.invalid/repository`.",
+  "expected_output": "The linkcheck build succeeds and output.json records the URI with status `unchecked`, without testing the network or filesystem.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This corrects the prior opaque-scheme case by exercising Candidate B's actual hierarchical-URI branch. An SSH URI is unambiguously non-local even though linkcheck cannot validate its protocol.",
+  "test_patch": "diff --git a/tests/test_build_linkcheck.py b/tests/test_build_linkcheck.py\nindex 1f6d67e90..1da9b3345 100644\n--- a/tests/test_build_linkcheck.py\n+++ b/tests/test_build_linkcheck.py\n@@ -157,3 +157,19 @@ def test_linkcheck_request_headers(app, status, warning):\n                 assert headers[\"X-Secret\"] == \"open sesami\"\n             else:\n                 assert headers[\"Accept\"] == \"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8\"\n+\n+\n+@pytest.mark.sphinx('linkcheck', testroot='linkcheck', freshenv=True)\n+def test_unsupported_hierarchical_uri_is_unchecked(app, status, warning):\n+    uri = 'ssh://example.invalid/repository'\n+    (app.srcdir / 'links.txt').write_text(\n+        '`SSH repository <%s>`_\\n' % uri\n+    )\n+\n+    app.builder.build_all()\n+\n+    rows = [json.loads(line) for line in\n+            (app.outdir / 'output.json').read_text().splitlines()]\n+\n+    assert len(rows) == 1\n+    assert rows[0]['uri'] == uri\n+    assert rows[0]['status'] == 'unchecked'\n+    assert app.statuscode == 0\n",
+  "test_command": "pytest -q tests/test_build_linkcheck.py::test_unsupported_hierarchical_uri_is_unchecked"
+}

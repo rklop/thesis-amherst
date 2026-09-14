@@ -1,0 +1,10 @@
+{
+  "test_name": "test_get_prep_value_malformed_tuple",
+  "specification_gap": "DecimalField.get_prep_value() should normalize ValueError from malformed decimal tuple inputs into a structured ValidationError, just as it does other invalid values. The candidates make identical source changes, so no legitimate runtime test can separate them.",
+  "input_description": "Pass (2, (1,), 0) to DecimalField.get_prep_value(). This resembles Decimal's (sign, digits, exponent) input form but has an invalid sign value, causing Decimal() to raise ValueError.",
+  "expected_output": "A ValidationError is raised with code 'invalid' and params {'value': (2, (1,), 0)}; the underlying ValueError must not escape.",
+  "expected_passing_candidate": "uncertain",
+  "why_interesting": "This is materially different from the prior model-save dictionary test: it exercises the ValueError branch, a tuple arity/type variant, and the ORM preparation entry point. Both candidates should pass because their resulting Django source is identical; their patch files differ only in non-semantic diff metadata.",
+  "test_patch": "diff --git a/tests/model_fields/test_decimalfield.py b/tests/model_fields/test_decimalfield.py\n--- a/tests/model_fields/test_decimalfield.py\n+++ b/tests/model_fields/test_decimalfield.py\n@@ -33,6 +33,15 @@ class DecimalFieldTests(TestCase):\n         f = models.DecimalField(max_digits=5, decimal_places=1)\n         self.assertIsNone(f.get_prep_value(None))\n         self.assertEqual(f.get_prep_value('2.4'), Decimal('2.4'))\n+\n+    def test_get_prep_value_malformed_tuple(self):\n+        field = models.DecimalField(max_digits=5, decimal_places=1)\n+        value = (2, (1,), 0)\n+        with self.assertRaises(ValidationError) as cm:\n+            field.get_prep_value(value)\n+        self.assertEqual(cm.exception.code, 'invalid')\n+        self.assertEqual(cm.exception.params, {'value': value})\n \n     def test_filter_with_strings(self):\n         \"\"\"\n",
+  "test_command": "./tests/runtests.py model_fields.test_decimalfield.DecimalFieldTests.test_get_prep_value_malformed_tuple"
+}

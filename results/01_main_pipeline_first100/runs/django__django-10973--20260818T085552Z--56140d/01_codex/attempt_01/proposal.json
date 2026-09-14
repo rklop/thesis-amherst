@@ -1,0 +1,10 @@
+{
+  "test_name": "test_nonzero_exit_status_is_raised",
+  "specification_gap": "Migrating from subprocess.check_call() to subprocess.run() must preserve failure propagation when the database client exits nonzero. The issue does not explicitly state this invariant.",
+  "input_description": "Temporarily use the current Python interpreter as the database executable and pass it a deliberately invalid command-line option, causing the real child process to exit nonzero.",
+  "expected_output": "DatabaseClient.runshell_db() raises subprocess.CalledProcessError instead of returning normally.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "Candidate A omits check=True and silently accepts the failed process. Candidate B uses check=True and preserves the externally observable behavior of the previous check_call() implementation. The test uses a real subprocess and does not assert internal call syntax.",
+  "test_patch": "diff --git a/tests/dbshell/test_postgresql.py b/tests/dbshell/test_postgresql.py\n--- a/tests/dbshell/test_postgresql.py\n+++ b/tests/dbshell/test_postgresql.py\n@@ -116,1 +116,11 @@\n         self.assertEqual(sigint_handler, signal.getsignal(signal.SIGINT))\n+\n+    def test_nonzero_exit_status_is_raised(self):\n+        import subprocess\n+        import sys\n+\n+        with mock.patch.object(DatabaseClient, 'executable_name', sys.executable):\n+            with self.assertRaises(subprocess.CalledProcessError):\n+                DatabaseClient.runshell_db({\n+                    'database': '--django-dbshell-invalid-option',\n+                })\n",
+  "test_command": "cd /testbed && python tests/runtests.py dbshell.test_postgresql.PostgreSqlDbshellCommandTestCase.test_nonzero_exit_status_is_raised"
+}
