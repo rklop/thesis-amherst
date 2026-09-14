@@ -9,7 +9,7 @@ This folder contains every differentiating test considered by the four-round pip
 
 Accepted tests became part of the evolving bank used to evaluate later candidate patches. Rejected tests are retained for inspection but were not used as requirements.
 
-[`all_tests.json`](all_tests.json) is the combined machine-readable list. The three attempts that never became reusable tests are explained in [`rejected_before_test_creation/`](rejected_before_test_creation/).
+[`all_tests.json`](all_tests.json) is the complete machine-readable list. [`tests_by_gold_result.json`](tests_by_gold_result.json) groups the same tests into **gold passed**, **gold failed and accepted**, and **gold failed and rejected**, with direct paths to every test folder. The three attempts that never became reusable tests are explained in [`rejected_before_test_creation/`](rejected_before_test_creation/).
 
 ## Browse by instance
 
