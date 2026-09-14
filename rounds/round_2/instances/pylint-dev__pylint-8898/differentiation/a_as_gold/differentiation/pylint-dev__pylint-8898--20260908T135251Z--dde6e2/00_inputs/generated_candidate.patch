@@ -1,0 +1,75 @@
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 30a5fd175..6b0d0683b 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -114,11 +114,69 @@ def _regex_transformer(value: str) -> Pattern[str]:
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+-    for pattern in _csv_transformer(value):
++    for pattern in _parse_rich_type_value(value):
+         patterns.append(_regex_transformer(pattern))
+     return patterns
+ 
+ 
++def _parse_rich_type_value(value: str) -> list[str]:
++    """Split a comma-separated string, respecting quantifiers in regex.
++
++    This handles cases like 'foo{1,3}' where the comma inside the braces
++    should not be treated as a separator. Also handles character classes
++    like '[a,b]' and escaped characters.
++    """
++    result: list[str] = []
++    current = ""
++    in_character_class = False
++    brace_depth = 0
++    i = 0
++
++    while i < len(value):
++        char = value[i]
++
++        # Handle escape sequences
++        if char == '\\' and i + 1 < len(value):
++            current += char + value[i + 1]
++            i += 2
++            continue
++
++        # Handle character classes - commas inside are not separators
++        if char == '[':
++            in_character_class = True
++        elif char == ']':
++            in_character_class = False
++
++        # Handle braces - track depth for quantifiers
++        if char == '{':
++            brace_depth += 1
++        elif char == '}':
++            brace_depth -= 1
++
++        # Handle comma separator - only if not in character class or quantifier
++        if char == ',' and not in_character_class and brace_depth == 0:
++            # Skip leading whitespace after separator
++            stripped = current.strip()
++            if stripped:
++                result.append(stripped)
++            current = ""
++            i += 1
++            # Skip whitespace after the comma
++            while i < len(value) and value[i] in ' \t':
++                i += 1
++            continue
++
++        current += char
++        i += 1
++
++    # Add the last element
++    stripped = current.strip()
++    if stripped:
++        result.append(stripped)
++
++    return result
++
++
+ def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions paths."""
+     patterns: list[Pattern[str]] = []

@@ -1,0 +1,56 @@
+diff --git a/lib/matplotlib/stackplot.py b/lib/matplotlib/stackplot.py
+index c580043eeb..6c9cc23af4 100644
+--- a/lib/matplotlib/stackplot.py
++++ b/lib/matplotlib/stackplot.py
+@@ -6,9 +6,12 @@ https://stackoverflow.com/q/2225995/
+ (https://stackoverflow.com/users/66549/doug)
+ """
+ 
++import itertools
++
+ import numpy as np
+ 
+ from matplotlib import _api
++from matplotlib import colors as mcolors
+ 
+ __all__ = ['stackplot']
+ 
+@@ -70,7 +73,13 @@ def stackplot(axes, x, *args,
+ 
+     labels = iter(labels)
+     if colors is not None:
+-        axes.set_prop_cycle(color=colors)
++        # Handle iterables (including iterators) and convert to list for
++        # to_rgba_array. We need to check if it's a string (which is also
++        # iterable) and reject it.
++        if isinstance(colors, str):
++            raise ValueError("colors must be a sequence of colors, not a string")
++        colors = list(colors)
++        colors = itertools.cycle(mcolors.to_rgba_array(colors))
+ 
+     # Assume data passed has not been 'stacked', so stack it here.
+     # We'll need a float buffer for the upcoming calculations.
+@@ -108,7 +117,10 @@ def stackplot(axes, x, *args,
+         stack += first_line
+ 
+     # Color between x = 0 and the first array.
+-    color = axes._get_lines.get_next_color()
++    if colors is not None:
++        color = next(colors)
++    else:
++        color = axes._get_lines.get_next_color()
+     coll = axes.fill_between(x, first_line, stack[0, :],
+                              facecolor=color, label=next(labels, None),
+                              **kwargs)
+@@ -117,7 +129,10 @@ def stackplot(axes, x, *args,
+ 
+     # Color between array i-1 and array i
+     for i in range(len(y) - 1):
+-        color = axes._get_lines.get_next_color()
++        if colors is not None:
++            color = next(colors)
++        else:
++            color = axes._get_lines.get_next_color()
+         r.append(axes.fill_between(x, stack[i, :], stack[i + 1, :],
+                                    facecolor=color, label=next(labels, None),
+                                    **kwargs))

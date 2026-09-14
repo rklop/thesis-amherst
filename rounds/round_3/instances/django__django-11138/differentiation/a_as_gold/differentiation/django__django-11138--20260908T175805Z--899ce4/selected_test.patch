@@ -1,0 +1,38 @@
+diff --git a/tests/timezones/tests.py b/tests/timezones/tests.py
+--- a/tests/timezones/tests.py
++++ b/tests/timezones/tests.py
+@@ -349,6 +349,32 @@ class NewDatabaseTests(TestCase):
+             self.assertEqual(Event.objects.filter(dt__week_day=7).count(), 1)
+             self.assertEqual(Event.objects.filter(dt__hour=22).count(), 1)
+             self.assertEqual(Event.objects.filter(dt__minute=30).count(), 2)
+             self.assertEqual(Event.objects.filter(dt__second=0).count(), 2)
+ 
++    @skipIfDBFeature('supports_timezones')
++    def test_query_date_uses_database_timezone(self):
++        database_timezone = connection.settings_dict['TIME_ZONE']
++        try:
++            connection.settings_dict['TIME_ZONE'] = 'Europe/Paris'
++            # Clear cached properties so reads and writes use the new setting.
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
++            event = Event.objects.create(
++                dt=datetime.datetime(2019, 7, 1, 23, 30, tzinfo=UTC),
++            )
++            with timezone.override(UTC):
++                self.assertEqual(
++                    Event.objects.get(dt__date=datetime.date(2019, 7, 1)),
++                    event,
++                )
++        finally:
++            connection.settings_dict['TIME_ZONE'] = database_timezone
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
+     def test_query_aggregation(self):
+         # Only min and max make sense for datetimes.
+         Event.objects.create(dt=datetime.datetime(2011, 9, 1, 23, 20, 20, tzinfo=EAT))

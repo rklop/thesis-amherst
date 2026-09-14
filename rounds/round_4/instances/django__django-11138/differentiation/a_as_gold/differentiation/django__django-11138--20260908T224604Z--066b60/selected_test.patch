@@ -1,0 +1,57 @@
+diff --git a/tests/backends/sqlite/tests.py b/tests/backends/sqlite/tests.py
+--- a/tests/backends/sqlite/tests.py
++++ b/tests/backends/sqlite/tests.py
+@@ -1,3 +1,4 @@
++import datetime
+ import re
+ import threading
+ import unittest
+@@ -9,7 +10,7 @@ from django.db import connection, transaction
+ from django.db.models import Avg, StdDev, Sum, Variance
+ from django.db.models.aggregates import Aggregate
+ from django.db.models.fields import CharField
+-from django.db.utils import NotSupportedError
++from django.db.utils import NotSupportedError, OperationalError
+ from django.test import (
+     TestCase, TransactionTestCase, override_settings, skipIfDBFeature,
+ )
+@@ -62,6 +63,39 @@ class Tests(TestCase):
+         with self.assertRaisesMessage(NotSupportedError, msg):
+             connection.ops.check_expression_support(aggregate)
+ 
++    @override_settings(USE_TZ=True, TIME_ZONE='UTC')
++    def test_ambiguous_datetime_lookup_with_database_timezone(self):
++        old_timezone = connection.settings_dict['TIME_ZONE']
++        try:
++            connection.settings_dict['TIME_ZONE'] = 'America/New_York'
++            # Clear timezone values cached for the previous database setting.
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
++            item = Item.objects.create(
++                name='ambiguous',
++                date=datetime.date(2019, 11, 3),
++                time=datetime.time(1, 30),
++                # 01:30 occurs twice in New York on this date. This is the
++                # occurrence after the clocks have moved back.
++                last_modified=datetime.datetime(
++                    2019, 11, 3, 6, 30, tzinfo=datetime.timezone.utc,
++                ),
++            )
++            with self.assertRaises(OperationalError):
++                Item.objects.filter(
++                    pk=item.pk,
++                    last_modified__date=datetime.date(2019, 11, 3),
++                ).exists()
++        finally:
++            connection.settings_dict['TIME_ZONE'] = old_timezone
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
+     def test_memory_db_test_name(self):
+         """A named in-memory db should be allowed where supported."""
+         from django.db.backends.sqlite3.base import DatabaseWrapper

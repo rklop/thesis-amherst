@@ -1,0 +1,38 @@
+diff --git a/tests/migrations/test_writer.py b/tests/migrations/test_writer.py
+--- a/tests/migrations/test_writer.py
++++ b/tests/migrations/test_writer.py
+@@ -250,6 +250,32 @@ class WriterTests(SimpleTestCase):
+     def test_serialize_lazy_objects(self):
+         pattern = re.compile(r'^foo$')
+         lazy_pattern = SimpleLazyObject(lambda: pattern)
+         self.assertEqual(self.serialize_round_trip(lazy_pattern), pattern)
+ 
++    def test_serialize_enum_expression_and_import_are_consistent(self):
++        class MutableModuleName(str):
++            current = 'stale.module'
++
++            def __str__(self):
++                return self.current
++
++        module_name = MutableModuleName('stale.module')
++
++        class DynamicNameEnum(enum.Enum):
++            VALUE = 'value'
++
++            @property
++            def name(self):
++                module_name.current = 'migrations.test_writer'
++                return self._name_
++
++        DynamicNameEnum.__module__ = module_name
++        self.assertSerializedResultEqual(
++            DynamicNameEnum.VALUE,
++            (
++                "migrations.test_writer.DynamicNameEnum['VALUE']",
++                {'import migrations.test_writer'},
++            ),
++        )
++
+     def test_serialize_enums(self):
+         class TextEnum(enum.Enum):
+             A = 'a-value'

@@ -1,0 +1,48 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "495af63b69585fbeb290593b404907537de2af6b4cac6f97cd16da010ec81a2f",
+    "test_sha256": "93b6a8a2a054b95f61edb57ef7c69edb8bb54b734049f640e318365bf1267378",
+    "test": {
+      "test_id": "matplotlib__matplotlib-26466--93b6a8a2a054b95f",
+      "test_name": "test_annotation_arraylike_xy_snapshot",
+      "specification_gap": "Annotation coordinates that are NumPy-coercible two-value objects must be normalized into renderable numeric coordinates while being snapshotted. Calling dispatchable `np.copy` can preserve a duck-array wrapper that is not itself iterable, even though it validly supplies coordinates through `__array__`.",
+      "expected_output": "The annotation renders without error and is pixel-identical to an annotation created from the immutable original pair `(0.25, 0.25)`; the arrow remains horizontal after the external mutation.",
+      "test_patch": "diff --git a/lib/matplotlib/tests/test_text.py b/lib/matplotlib/tests/test_text.py\n--- a/lib/matplotlib/tests/test_text.py\n+++ b/lib/matplotlib/tests/test_text.py\n@@ -663,6 +663,37 @@ def test_annotation_update():\n     assert not np.allclose(extent1.get_points(), extent2.get_points(),\n                            rtol=1e-6)\n \n \n+@check_figures_equal()\n+def test_annotation_arraylike_xy_snapshot(fig_test, fig_ref):\n+    class ArrayLikePoint:\n+        def __init__(self, values):\n+            self.values = np.asarray(values)\n+\n+        def __array__(self, dtype=None, copy=None):\n+            array = np.asarray(self.values, dtype=dtype)\n+            return array.copy() if copy else array\n+\n+        def __array_function__(self, func, types, args, kwargs):\n+            if func is np.copy:\n+                return type(self)(self.values.copy())\n+            return NotImplemented\n+\n+    point = ArrayLikePoint([.25, .25])\n+    arrowprops = {\"arrowstyle\": \"<->\"}\n+    fig_test.subplots().annotate(\n+        \"\",\n+        xy=point,\n+        xytext=(.75, .25),\n+        arrowprops=arrowprops)\n+    point.values[1] = .75\n+\n+    fig_ref.subplots().annotate(\n+        \"\",\n+        xy=(.25, .25),\n+        xytext=(.75, .25),\n+        arrowprops=arrowprops)\n+\n+\n @check_figures_equal(extensions=[\"png\"])\n def test_annotation_units(fig_test, fig_ref):\n     ax = fig_test.add_subplot()\n",
+      "test_command": "python -m pytest -q lib/matplotlib/tests/test_text.py::test_annotation_arraylike_xy_snapshot",
+      "test_patch_sha256": "93b6a8a2a054b95f61edb57ef7c69edb8bb54b734049f640e318365bf1267378",
+      "polarity": "must_fail",
+      "negative_specification": "Require the recorded target-test failure for test_annotation_arraylike_xy_snapshot; semantic validity was not reviewed in this ablation.",
+      "expected_failure": {
+        "forbidden_substrings": [
+          "collected 0 items",
+          "no tests ran",
+          "ERROR collecting",
+          "command not found",
+          "No such file or directory",
+          "Could not find a version that satisfies the requirement",
+          "Temporary failure in name resolution"
+        ],
+        "kind": "behavioral_test_failure",
+        "reference_log_sha256": "4288884a30d503b0e0eda5c755b45a507558557199f45005c3094383dab5c85d",
+        "reference_returncode": 1,
+        "required_any_substrings": [
+          "FAILED"
+        ],
+        "required_substrings": [
+          "test_annotation_arraylike_xy_snapshot"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 4.838,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "violated",
+  "test_id": "matplotlib__matplotlib-26466--93b6a8a2a054b95f",
+  "polarity": "must_fail"
+}

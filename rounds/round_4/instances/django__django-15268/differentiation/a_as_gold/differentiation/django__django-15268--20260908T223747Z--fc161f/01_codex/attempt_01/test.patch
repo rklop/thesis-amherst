@@ -1,0 +1,28 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -209,10 +209,24 @@ class OptimizerTests(SimpleTestCase):
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),
+             migrations.AlterIndexTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_together_different_subclasses(self):
++        """Different subclasses can optimize through each other."""
++        class FirstAlterUniqueTogether(migrations.AlterUniqueTogether):
++            pass
++
++        class SecondAlterUniqueTogether(migrations.AlterUniqueTogether):
++            pass
++
++        first = FirstAlterUniqueTogether("Foo", [["a", "b"]])
++        middle = SecondAlterUniqueTogether("Foo", [["a", "c"]])
++        last = FirstAlterUniqueTogether("Foo", [["a", "d"]])
++        optimized, _ = self.optimize([first, middle, last], "migrations")
++        self.assertEqual(optimized, [middle, last])
++
+     def test_alter_alter_owrt_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterOrderWithRespectTo("Foo", "a"),
+             migrations.AlterOrderWithRespectTo("Foo", "b"),

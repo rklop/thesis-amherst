@@ -1,0 +1,10 @@
+{
+  "test_name": "test_implemented_function_evalf_symbolic_result",
+  "specification_gap": "Recursive evalf must apply not only to arguments passed into `_imp_`, but also to a symbolic numeric expression returned by `_imp_`. This includes complex-valued SymPy expressions that cannot be directly converted to `Float`.",
+  "input_description": "Create an implemented unary function whose implementation returns `x*I`, then call `f(2).evalf()`.",
+  "expected_output": "The call returns the same numeric complex value as `(2*I).evalf()` (displayed as approximately `2.00000000000000*I`), rather than remaining as the unevaluated expression `f(2)`.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "Candidate B evaluates the argument but passes the symbolic complex return value directly to `Float`, which raises a handled conversion error and leaves the function unevaluated. Candidate A explicitly calls `evalf` on the returned expression, matching the issue's stated recursive-return contract.",
+  "test_patch": "diff --git a/sympy/core/tests/test_evalf.py b/sympy/core/tests/test_evalf.py\n--- a/sympy/core/tests/test_evalf.py\n+++ b/sympy/core/tests/test_evalf.py\n@@ -328,6 +328,14 @@ def test_implemented_function_evalf():\n     del f._imp_     # XXX: due to caching _imp_ would influence all other tests\n \n \n+def test_implemented_function_evalf_symbolic_result():\n+    from sympy.utilities.lambdify import implemented_function\n+    f = Function('symbolic_result_evalf')\n+    f = implemented_function(f, lambda x: x*I)\n+    assert f(2).evalf() == (2*I).evalf()\n+    del f._imp_\n+\n+\n def test_evaluate_false():\n     for no in [0, False]:\n         assert Add(3, 2, evaluate=no).is_Add\n",
+  "test_command": "cd /testbed && bin/test sympy/core/tests/test_evalf.py -k test_implemented_function_evalf_symbolic_result"
+}

@@ -1,0 +1,43 @@
+diff --git a/sphinx/util/docfields.py b/sphinx/util/docfields.py
+index 3a3367ebe..64f366d4a 100644
+--- a/sphinx/util/docfields.py
++++ b/sphinx/util/docfields.py
+@@ -22,6 +22,29 @@ if TYPE_CHECKING:
+     from sphinx.directive import ObjectDescription
+ 
+ 
++
++def _split_type_and_name(fieldarg: str) -> Tuple[str, str]:
++    """Split a field argument like 'Dict[str, str] name' into ('Dict[str, str]', 'name').
++    
++    This correctly handles types with nested brackets like dict(str, str),
++    Dict[str, str], Tuple[str, ...], etc.
++    """
++    # Find the last whitespace that is outside of brackets/parentheses/braces
++    depth = 0
++    last_space = -1
++    for i, char in enumerate(fieldarg):
++        if char in '([{':
++            depth += 1
++        elif char in ')]}':
++            depth -= 1
++        elif char.isspace() and depth == 0:
++            last_space = i
++    
++    if last_space > 0:
++        return fieldarg[:last_space], fieldarg[last_space+1:]
++    raise ValueError("No space found in fieldarg")
++
++
+ def _is_single_paragraph(node: nodes.field_body) -> bool:
+     """True if the node only contains one paragraph (and system messages)."""
+     if len(node) == 0:
+@@ -298,7 +321,7 @@ class DocFieldTransformer:
+             # also support syntax like ``:param type name:``
+             if typedesc.is_typed:
+                 try:
+-                    argtype, argname = fieldarg.split(None, 1)
++                    argtype, argname = _split_type_and_name(fieldarg)
+                 except ValueError:
+                     pass
+                 else:

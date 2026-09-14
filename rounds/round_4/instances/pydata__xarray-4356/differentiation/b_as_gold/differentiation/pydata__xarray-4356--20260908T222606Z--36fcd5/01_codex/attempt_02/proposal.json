@@ -1,0 +1,10 @@
+{
+  "test_name": "test_min_count_generic_timedelta_dask_scalar",
+  "specification_gap": "An explicit single-dimension scalar reduction must enforce min_count even when a lazy timedelta array retains NumPy's generic timedelta unit.",
+  "input_description": "A one-element Dask-backed DataArray containing only a generic-unit timedelta NaT is summed over its named dimension with skipna=True and min_count=1.",
+  "expected_output": "The scalar result is missing because the input contains zero non-NA values.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This dtype-and-backend boundary reaches the scalar-axis behavior added by the supplied gold patch. Unlike the prior unit-specific eager timedelta test, the lazy array preserves the generic timedelta dtype for which candidate_a retains the old scalar exclusion and returns a zero-duration sum.",
+  "test_patch": "diff --git a/xarray/tests/test_duck_array_ops.py b/xarray/tests/test_duck_array_ops.py\n--- a/xarray/tests/test_duck_array_ops.py\n+++ b/xarray/tests/test_duck_array_ops.py\n@@ -594,6 +594,16 @@ def test_min_count(dim_num, dtype, dask, func, aggdim):\n     assert_dask_array(actual, dask)\n \n \n+@pytest.mark.skipif(not has_dask, reason=\"This is for dask.\")\n+def test_min_count_generic_timedelta_dask_scalar():\n+    import dask.array as da\n+\n+    data = da.from_array(np.array([np.timedelta64(\"NaT\")]), chunks=1)\n+    actual = DataArray(data, dims=\"x\").sum(\"x\", skipna=True, min_count=1)\n+\n+    assert_equal(actual.compute().isnull(), DataArray(True))\n+\n+\n @pytest.mark.parametrize(\"func\", [\"sum\", \"prod\"])\n def test_min_count_dataset(func):\n     da = construct_dataarray(2, dtype=float, contains_nan=True, dask=False)\n",
+  "test_command": "python -m pytest -q xarray/tests/test_duck_array_ops.py::test_min_count_generic_timedelta_dask_scalar"
+}

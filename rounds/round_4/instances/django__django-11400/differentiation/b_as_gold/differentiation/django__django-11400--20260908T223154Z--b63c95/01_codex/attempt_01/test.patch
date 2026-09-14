@@ -1,0 +1,59 @@
+diff --git a/tests/model_fields/models.py b/tests/model_fields/models.py
+--- a/tests/model_fields/models.py
++++ b/tests/model_fields/models.py
+@@ -32,6 +32,26 @@ class Bar(models.Model):
+     b = models.CharField(max_length=10)
+     a = models.ForeignKey(Foo, models.CASCADE, default=get_foo, related_name='bars')
+ 
++
++class ChoiceTargetManager(models.Manager):
++    def get_queryset(self):
++        return super().get_queryset().order_by('-name')
++
++
++class ChoiceTarget(models.Model):
++    name = models.CharField(max_length=10)
++
++    objects = ChoiceTargetManager()
++
++    class Meta:
++        ordering = ('name',)
++
++    def __str__(self):
++        return self.name
++
++
++class ChoiceSource(models.Model):
++    target = models.ForeignKey(ChoiceTarget, models.CASCADE)
++
+ 
+ class Whiz(models.Model):
+     CHOICES = (
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -7,7 +7,7 @@ from django.test import SimpleTestCase, TestCase
+ from django.utils.functional import lazy
+ 
+ from .models import (
+-    Bar, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,
++    Bar, ChoiceSource, ChoiceTarget, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,
+     WhizIter, WhizIterEmpty,
+ )
+ 
+@@ -231,6 +231,15 @@ class GetChoicesOrderingTests(TestCase):
+     def assertChoicesEqual(self, choices, objs):
+         self.assertEqual(choices, [(obj.pk, str(obj)) for obj in objs])
+ 
++    def test_get_choices_preserves_default_manager_ordering(self):
++        alpha = ChoiceTarget.objects.create(name='Alpha')
++        zulu = ChoiceTarget.objects.create(name='Zulu')
++        field = ChoiceSource._meta.get_field('target')
++        self.assertChoicesEqual(
++            field.get_choices(include_blank=False),
++            [zulu, alpha],
++        )
++
+     def test_get_choices(self):
+         self.assertChoicesEqual(
+             self.field.get_choices(include_blank=False, ordering=('a',)),

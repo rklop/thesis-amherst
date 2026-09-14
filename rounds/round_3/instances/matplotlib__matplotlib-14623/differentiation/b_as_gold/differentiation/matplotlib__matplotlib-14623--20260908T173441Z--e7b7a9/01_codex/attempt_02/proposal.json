@@ -1,0 +1,10 @@
+{
+  "test_name": "test_log_scale_inverted_limits_with_positive_domain_scalar",
+  "specification_gap": "For two descending positive log limits, inversion follows from their ordering and the positivity of the smaller endpoint; preserving inversion must not require an additional greater-than-zero comparison on the larger scalar.",
+  "input_description": "Call the public tuple form of Axes.set_ylim on a log-scaled y-axis with limits (10, 1). The upper value is a finite float subclass whose greater-than comparison is defined only against values inside the positive log domain.",
+  "expected_output": "set_ylim completes without error, get_ylim returns (10.0, 1.0), and yaxis_inverted() is true.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises a scalar type variant through the public API. Candidate_b checks the smaller endpoint for positivity and preserves the descending pair. Candidate_a redundantly compares the larger endpoint against zero, which raises TypeError for this otherwise valid positive-domain scalar.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_log_inverted_limits.py b/lib/matplotlib/tests/test_log_inverted_limits.py\nnew file mode 100644\n--- /dev/null\n+++ b/lib/matplotlib/tests/test_log_inverted_limits.py\n@@ -0,0 +1,16 @@\n+import matplotlib.pyplot as plt\n+\n+\n+def test_log_scale_inverted_limits_with_positive_domain_scalar():\n+    class PositiveLogLimit(float):\n+        def __gt__(self, other):\n+            if other <= 0:\n+                raise TypeError(\"comparison outside the positive log domain\")\n+            return super().__gt__(other)\n+\n+    fig, ax = plt.subplots()\n+    ax.set_yscale(\"log\")\n+    ax.set_ylim((PositiveLogLimit(10), 1.0))\n+\n+    assert ax.get_ylim() == (10.0, 1.0)\n+    assert ax.yaxis_inverted()\n",
+  "test_command": "python -m pytest -q lib/matplotlib/tests/test_log_inverted_limits.py"
+}

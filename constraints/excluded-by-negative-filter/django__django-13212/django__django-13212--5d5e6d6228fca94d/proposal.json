@@ -1,0 +1,10 @@
+{
+  "test_name": "test_decimal_validator_non_finite_value_error_code",
+  "specification_gap": "Adding the rejected value to a validator's ValidationError should enrich its params without changing pre-existing error metadata. In particular, DecimalValidator's non-finite-number error must retain its existing None error code.",
+  "input_description": "A DecimalValidator with a custom %(value)s invalid message receives Decimal('NaN').",
+  "expected_output": "It raises ValidationError whose rendered message is '\"NaN\" is not a number.', whose params['value'] is the supplied Decimal object, and whose code remains None.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises the requested value interpolation on the non-finite Decimal boundary while checking the general invariant that adding error context must not introduce a new validation code. Candidate_b changes that code to 'invalid'.",
+  "test_patch": "diff --git a/tests/validators/tests.py b/tests/validators/tests.py\n--- a/tests/validators/tests.py\n+++ b/tests/validators/tests.py\n@@ -328,6 +328,18 @@ class TestValidators(SimpleTestCase):\n                         validator(value)\n                 else:\n                     self.assertEqual(expected, validator(value))\n+\n+    def test_decimal_validator_non_finite_value_error_code(self):\n+        value = Decimal('NaN')\n+        validator = DecimalValidator(max_digits=10, decimal_places=2)\n+        validator.messages = {\n+            'invalid': '\"%(value)s\" is not a number.',\n+        }\n+        with self.assertRaises(ValidationError) as cm:\n+            validator(value)\n+        self.assertEqual(cm.exception.messages, ['\"NaN\" is not a number.'])\n+        self.assertIs(cm.exception.params['value'], value)\n+        self.assertIsNone(cm.exception.code)\n \n     def test_single_message(self):\n         v = ValidationError('Not Valid')\n",
+  "test_command": "python tests/runtests.py validators.tests.TestValidators.test_decimal_validator_non_finite_value_error_code"
+}

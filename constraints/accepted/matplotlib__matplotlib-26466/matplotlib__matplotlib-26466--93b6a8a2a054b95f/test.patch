@@ -1,0 +1,42 @@
+diff --git a/lib/matplotlib/tests/test_text.py b/lib/matplotlib/tests/test_text.py
+--- a/lib/matplotlib/tests/test_text.py
++++ b/lib/matplotlib/tests/test_text.py
+@@ -663,6 +663,37 @@ def test_annotation_update():
+     assert not np.allclose(extent1.get_points(), extent2.get_points(),
+                            rtol=1e-6)
+ 
+ 
++@check_figures_equal()
++def test_annotation_arraylike_xy_snapshot(fig_test, fig_ref):
++    class ArrayLikePoint:
++        def __init__(self, values):
++            self.values = np.asarray(values)
++
++        def __array__(self, dtype=None, copy=None):
++            array = np.asarray(self.values, dtype=dtype)
++            return array.copy() if copy else array
++
++        def __array_function__(self, func, types, args, kwargs):
++            if func is np.copy:
++                return type(self)(self.values.copy())
++            return NotImplemented
++
++    point = ArrayLikePoint([.25, .25])
++    arrowprops = {"arrowstyle": "<->"}
++    fig_test.subplots().annotate(
++        "",
++        xy=point,
++        xytext=(.75, .25),
++        arrowprops=arrowprops)
++    point.values[1] = .75
++
++    fig_ref.subplots().annotate(
++        "",
++        xy=(.25, .25),
++        xytext=(.75, .25),
++        arrowprops=arrowprops)
++
++
+ @check_figures_equal(extensions=["png"])
+ def test_annotation_units(fig_test, fig_ref):
+     ax = fig_test.add_subplot()

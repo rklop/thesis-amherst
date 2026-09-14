@@ -1,0 +1,52 @@
+diff --git a/xarray/core/nanops.py b/xarray/core/nanops.py
+index 41c8d258..78fed923 100644
+--- a/xarray/core/nanops.py
++++ b/xarray/core/nanops.py
+@@ -26,19 +26,34 @@ def _maybe_null_out(result, axis, mask, min_count=1):
+     """
+     xarray version of pandas.core.nanops._maybe_null_out
+     """
+-    if hasattr(axis, "__len__"):  # if tuple or list
+-        raise ValueError(
+-            "min_count is not available for reduction with more than one dimensions."
+-        )
+-
+-    if axis is not None and getattr(result, "ndim", False):
+-        null_mask = (mask.shape[axis] - mask.sum(axis) - min_count) < 0
+-        if null_mask.any():
+-            dtype, fill_value = dtypes.maybe_promote(result.dtype)
+-            result = result.astype(dtype)
+-            result[null_mask] = fill_value
+-
+-    elif getattr(result, "dtype", None) not in dtypes.NAT_TYPES:
++
++    if axis is not None and hasattr(result, "ndim"):
++        # np.take and prod work for both single axis and multiple axes
++        null_mask = (np.prod(np.take(mask.shape, axis)) - mask.sum(axis) - min_count) < 0
++        if isinstance(result, np.ndarray):
++            if null_mask.any():
++                dtype, fill_value = dtypes.maybe_promote(result.dtype)
++                result = result.astype(dtype)
++                result[null_mask] = fill_value
++        elif isinstance(result, dask_array_type):
++            # dask array - compute the null_mask check
++            if null_mask.any():
++                dtype, fill_value = dtypes.maybe_promote(result.dtype)
++                result = result.astype(dtype)
++                result[null_mask] = fill_value
++        else:
++            # result is a numpy scalar
++            if null_mask:
++                result = np.nan
++
++    elif hasattr(result, "dtype"):
++        # result has a dtype attribute (numpy scalar or array)
++        if result.dtype not in dtypes.NAT_TYPES:
++            null_mask = mask.size - mask.sum()
++            if null_mask < min_count:
++                result = np.nan
++    else:
++        # result is a Python scalar (e.g., from object array reduction)
+         null_mask = mask.size - mask.sum()
+         if null_mask < min_count:
+             result = np.nan

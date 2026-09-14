@@ -1,0 +1,10 @@
+{
+  "test_name": "test_fixture_dirs_with_pathlike_duplicates",
+  "specification_gap": "FIXTURE_DIRS duplicate detection must compare os.PathLike entries using their filesystem representation (the os.fspath() protocol), not their unrelated str() representation.",
+  "input_description": "FIXTURE_DIRS contains a string path and a custom os.PathLike object whose __fspath__() returns that same path.",
+  "expected_output": "Calling loaddata raises ImproperlyConfigured with \"settings.FIXTURE_DIRS contains duplicates.\" Candidate A converts both entries with os.fspath() and detects the duplicate; candidate B converts the object with str(), so it misses the duplicate.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This narrow type variant verifies the general path protocol underlying the reported pathlib.Path defect. It observes the public duplicate-validation behavior without asserting implementation details.",
+  "test_patch": "diff --git a/tests/fixtures_regress/tests.py b/tests/fixtures_regress/tests.py\n--- a/tests/fixtures_regress/tests.py\n+++ b/tests/fixtures_regress/tests.py\n@@ -555,6 +555,20 @@ class TestFixtures(TestCase):\n         ):\n             management.call_command(\"loaddata\", \"absolute.json\", verbosity=0)\n \n+    def test_fixture_dirs_with_pathlike_duplicates(self):\n+        fixture_dir = os.path.join(_cur_dir, \"fixtures_1\")\n+\n+        class FixturePath(os.PathLike):\n+            def __fspath__(self):\n+                return fixture_dir\n+\n+        with override_settings(FIXTURE_DIRS=[fixture_dir, FixturePath()]):\n+            with self.assertRaisesMessage(\n+                ImproperlyConfigured,\n+                \"settings.FIXTURE_DIRS contains duplicates.\",\n+            ):\n+                management.call_command(\"loaddata\", \"absolute.json\", verbosity=0)\n+\n     @override_settings(FIXTURE_DIRS=[os.path.join(_cur_dir, \"fixtures\")])\n     def test_fixture_dirs_with_default_fixture_path(self):\n         \"\"\"\n",
+  "test_command": "cd /testbed && python tests/runtests.py fixtures_regress.tests.TestFixtures.test_fixture_dirs_with_pathlike_duplicates"
+}

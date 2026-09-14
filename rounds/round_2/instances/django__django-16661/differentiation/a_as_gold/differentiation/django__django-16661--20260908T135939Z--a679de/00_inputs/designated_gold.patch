@@ -1,0 +1,56 @@
+diff --git a/django/contrib/admin/options.py b/django/contrib/admin/options.py
+index 5240b07cd6..352739e869 100644
+--- a/django/contrib/admin/options.py
++++ b/django/contrib/admin/options.py
+@@ -466,19 +466,48 @@ class BaseModelAdmin(metaclass=forms.MediaDefiningClass):
+             # then the id value would be found already from employee__department_id.
+             if not prev_field or (
+                 prev_field.is_relation
+-                and field not in prev_field.path_infos[-1].target_fields
++                and (
++                    field not in prev_field.path_infos[-1].target_fields
++                    or (
++                        # Add the field to relation_parts if it's a traversable
++                        # relation, even if it's a target field of the previous
++                        # relation (e.g., a OneToOneField used as primary key).
++                        getattr(field, "path_infos", None)
++                        and field.path_infos
++                    )
++                )
+             ):
+                 relation_parts.append(part)
+             if not getattr(field, "path_infos", None):
+                 # This is not a relational field, so further parts
+                 # must be transforms.
+                 break
++            if not field.path_infos:
++                # This field is a relation but not traversable (e.g., a
++                # OneToOneField used as primary key with empty path_info).
++                # Don't allow further traversal.
++                break
+             prev_field = field
+             model = field.path_infos[-1].to_opts.model
+ 
+-        if len(relation_parts) <= 1:
+-            # Either a local field filter, or no fields at all.
++        if len(relation_parts) > 1:
++            # More than one relation part, need to check if it's valid.
++            pass
++        elif prev_field is None:
++            # No fields at all.
+             return True
++        else:
++            # Only one relation part, check if it was a multi-part lookup
++            # that ended early (e.g., due to non-traversable relation).
++            # If so, we need to validate it properly.
++            lookup_parts = lookup.split(LOOKUP_SEP)
++            if len(lookup_parts) > 1:
++                # This is a multi-part lookup that ended early.
++                # Go through the validation logic below.
++                pass
++            else:
++                # Single local field filter.
++                return True
+         valid_lookups = {self.date_hierarchy}
+         for filter_item in self.list_filter:
+             if isinstance(filter_item, type) and issubclass(

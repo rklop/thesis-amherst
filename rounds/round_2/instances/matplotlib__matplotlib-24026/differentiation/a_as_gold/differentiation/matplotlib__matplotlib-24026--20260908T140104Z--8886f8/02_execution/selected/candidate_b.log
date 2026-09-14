@@ -1,0 +1,106 @@
+[pipeline] checking candidate patch
+[pipeline] checking generated test patch
+[pipeline] executing generated test command
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_stackplot_color_iterator_does_not_advance_prop_cycle ___________
+
+    def test_stackplot_color_iterator_does_not_advance_prop_cycle():
+        with mpl.rc_context({
+                "axes.prop_cycle": cycler(color=["red", "green", "blue"])}):
+            fig, ax = plt.subplots()
+>           areas = ax.stackplot(
+                [0, 1], [1, 1], [2, 2], colors=iter(["C1", "C2"]))
+
+lib/matplotlib/tests/test_axes.py:2874: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+lib/matplotlib/__init__.py:1423: in inner
+    return func(ax, *map(sanitize_sequence, args), **kwargs)
+lib/matplotlib/stackplot.py:76: in stackplot
+    colors = to_rgba_array(colors)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+c = <list_iterator object at 0x767663f7b430>, alpha = None
+
+    def to_rgba_array(c, alpha=None):
+        """
+        Convert *c* to a (n, 4) array of RGBA colors.
+    
+        Parameters
+        ----------
+        c : Matplotlib color or array of colors
+            If *c* is a masked array, an ndarray is returned with a (0, 0, 0, 0)
+            row for each masked value or row in *c*.
+    
+        alpha : float or sequence of floats, optional
+            If *alpha* is given, force the alpha value of the returned RGBA tuple
+            to *alpha*.
+    
+            If None, the alpha value from *c* is used. If *c* does not have an
+            alpha channel, then alpha defaults to 1.
+    
+            *alpha* is ignored for the color value ``"none"`` (case-insensitive),
+            which always maps to ``(0, 0, 0, 0)``.
+    
+            If *alpha* is a sequence and *c* is a single color, *c* will be
+            repeated to match the length of *alpha*.
+    
+        Returns
+        -------
+        array
+            (n, 4) array of RGBA colors,  where each channel (red, green, blue,
+            alpha) can assume values between 0 and 1.
+        """
+        # Special-case inputs that are already arrays, for performance.  (If the
+        # array has the wrong kind or shape, raise the error during one-at-a-time
+        # conversion.)
+        if np.iterable(alpha):
+            alpha = np.asarray(alpha).ravel()
+        if (isinstance(c, np.ndarray) and c.dtype.kind in "if"
+                and c.ndim == 2 and c.shape[1] in [3, 4]):
+            mask = c.mask.any(axis=1) if np.ma.is_masked(c) else None
+            c = np.ma.getdata(c)
+            if np.iterable(alpha):
+                if c.shape[0] == 1 and alpha.shape[0] > 1:
+                    c = np.tile(c, (alpha.shape[0], 1))
+                elif c.shape[0] != alpha.shape[0]:
+                    raise ValueError("The number of colors must match the number"
+                                     " of alpha values if there are more than one"
+                                     " of each.")
+            if c.shape[1] == 3:
+                result = np.column_stack([c, np.zeros(len(c))])
+                result[:, -1] = alpha if alpha is not None else 1.
+            elif c.shape[1] == 4:
+                result = c.copy()
+                if alpha is not None:
+                    result[:, -1] = alpha
+            if mask is not None:
+                result[mask] = 0
+            if np.any((result < 0) | (result > 1)):
+                raise ValueError("RGBA values should be within 0-1 range")
+            return result
+        # Handle single values.
+        # Note that this occurs *after* handling inputs that are already arrays, as
+        # `to_rgba(c, alpha)` (below) is expensive for such inputs, due to the need
+        # to format the array in the ValueError message(!).
+        if cbook._str_lower_equal(c, "none"):
+            return np.zeros((0, 4), float)
+        try:
+            if np.iterable(alpha):
+                return np.array([to_rgba(c, a) for a in alpha], float)
+            else:
+                return np.array([to_rgba(c, alpha)], float)
+        except (ValueError, TypeError):
+            pass
+    
+        if isinstance(c, str):
+            raise ValueError(f"{c!r} is not a valid color value.")
+    
+>       if len(c) == 0:
+E       TypeError: object of type 'list_iterator' has no len()
+
+lib/matplotlib/colors.py:473: TypeError
+=========================== short test summary info ============================
+FAILED lib/matplotlib/tests/test_axes.py::test_stackplot_color_iterator_does_not_advance_prop_cycle
+1 failed in 2.35s
+[pipeline] test_exit_code=1

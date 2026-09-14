@@ -1,0 +1,31 @@
+diff --git a/tests/timezones/tests.py b/tests/timezones/tests.py
+--- a/tests/timezones/tests.py
++++ b/tests/timezones/tests.py
+@@ -228,6 +228,27 @@
+ class NewDatabaseTests(TestCase):
+     naive_warning = 'DateTimeField Event.dt received a naive datetime'
+ 
++    def test_date_lookup_with_matching_database_timezone_at_dst_transition(self):
++        database_timezone = 'Europe/Paris'
++        original_database_timezone = connection.settings_dict['TIME_ZONE']
++        connection.settings_dict['TIME_ZONE'] = database_timezone
++        connection.__dict__.pop('timezone', None)
++        connection.__dict__.pop('timezone_name', None)
++        try:
++            tz = pytz.timezone(database_timezone)
++            ambiguous_datetime = tz.localize(
++                datetime.datetime(2019, 10, 27, 2, 30), is_dst=True,
++            )
++            Event.objects.create(dt=ambiguous_datetime)
++            with timezone.override(tz):
++                self.assertTrue(
++                    Event.objects.filter(dt__date=ambiguous_datetime.date()).exists()
++                )
++        finally:
++            connection.settings_dict['TIME_ZONE'] = original_database_timezone
++            connection.__dict__.pop('timezone', None)
++            connection.__dict__.pop('timezone_name', None)
++
+     @requires_tz_support
+     def test_naive_datetime(self):
+         dt = datetime.datetime(2011, 9, 1, 13, 20, 30)

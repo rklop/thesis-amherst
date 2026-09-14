@@ -1,0 +1,31 @@
+diff --git a/django/db/migrations/operations/models.py b/django/db/migrations/operations/models.py
+index c120f5d32d..1790626ffc 100644
+--- a/django/db/migrations/operations/models.py
++++ b/django/db/migrations/operations/models.py
+@@ -470,6 +470,26 @@ class AlterModelTable(ModelOptionOperation):
+ class AlterTogetherOptionOperation(ModelOptionOperation):
+     option_name = None
+ 
++    def reduce(self, operation, app_label):
++        if (
++            isinstance(operation, AlterTogetherOptionOperation) and
++            self.option_name == operation.option_name and
++            self.name_lower == operation.name_lower and
++            # Only reduce if the operation class is the same or a subclass.
++            # This ensures a custom subclass isn't reduced to a built-in sibling.
++            isinstance(operation, self.__class__)
++        ):
++            return [operation]
++        # Allow passing through if the other operation has a different option_name
++        # (e.g., AlterUniqueTogether can pass through AlterIndexTogether)
++        elif (
++            isinstance(operation, AlterTogetherOptionOperation) and
++            self.option_name != operation.option_name and
++            self.name_lower == operation.name_lower
++        ):
++            return True
++        return super().reduce(operation, app_label)
++
+     def __init__(self, name, option_value):
+         if option_value:
+             option_value = set(normalize_together(option_value))

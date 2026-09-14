@@ -1,0 +1,38 @@
+diff --git a/lib/matplotlib/tests/test_axes.py b/lib/matplotlib/tests/test_axes.py
+--- a/lib/matplotlib/tests/test_axes.py
++++ b/lib/matplotlib/tests/test_axes.py
+@@ -1,4 +1,5 @@
+ import contextlib
++import gc
+ from collections import namedtuple
+ import datetime
+ from decimal import Decimal
+@@ -8,6 +9,7 @@ from itertools import product
+ import platform
+ from types import SimpleNamespace
++import weakref
+ 
+ import dateutil.tz
+ 
+@@ -487,6 +489,20 @@ def test_inverted_cla():
+     plt.close(fig)
+ 
+ 
++def test_clf_releases_deparented_artist_siblings():
++    fig = Figure()
++    ax = fig.subplots()
++    retained, unreferenced = ax.plot(
++        [0, 1], [0, 1], [0, 1], [1, 0])
++    unreferenced_ref = weakref.ref(unreferenced)
++    del unreferenced
++
++    fig.clf()
++    gc.collect()
++
++    assert retained.axes is retained.figure is None
++    assert unreferenced_ref() is None
++
++
+ def test_subclass_clear_cla():
+     # Ensure that subclasses of Axes call cla/clear correctly.
+     # Note, we cannot use mocking here as we want to be sure that the

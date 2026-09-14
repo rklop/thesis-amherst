@@ -1,0 +1,112 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..5f3d00791 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -853,6 +853,7 @@ class PyProperty(PyObject):
+     option_spec.update({
+         'abstractmethod': directives.flag,
+         'type': directives.unchanged,
++        'classmethod': directives.flag,
+     })
+ 
+     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:
+@@ -865,9 +866,12 @@ class PyProperty(PyObject):
+         return fullname, prefix
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+-        prefix = ['property']
++        prefix = []
+         if 'abstractmethod' in self.options:
+-            prefix.insert(0, 'abstract')
++            prefix.append('abstract')
++        if 'classmethod' in self.options:
++            prefix.append('class')
++        prefix.append('property')
+ 
+         return ' '.join(prefix) + ' '
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..923e5fb7b 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -2676,9 +2676,16 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+         if inspect.isabstractmethod(self.object):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
+-        if safe_getattr(self.object, 'fget', None) and self.config.autodoc_typehints != 'none':
++        if isinstance(self.object, classmethod):
++            self.add_line('   :classmethod:', sourcename)
++            # For classmethod-wrapped properties, the fget is in __func__
++            fget = self.object.__func__.fget
++        else:
++            fget = safe_getattr(self.object, 'fget', None)
++
++        if fget and self.config.autodoc_typehints != 'none':
+             try:
+-                signature = inspect.signature(self.object.fget,
++                signature = inspect.signature(fget,
+                                               type_aliases=self.config.autodoc_type_aliases)
+                 if signature.return_annotation is not Parameter.empty:
+                     objrepr = stringify_typehint(signature.return_annotation)
+@@ -2690,6 +2697,17 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+             except ValueError:
+                 return None
+ 
++    def get_doc(self, ignore: int = None) -> Optional[List[List[str]]]:
++        """Override get_doc to get docstring from fget for classmethod-wrapped properties."""
++        if isinstance(self.object, classmethod):
++            # Get docstring from the fget function
++            fget = self.object.__func__.fget
++            if fget:
++                doc = inspect.getdoc(fget)
++                if doc:
++                    return [doc.split('\n')]
++        return super().get_doc(ignore)
++
+ 
+ class NewTypeAttributeDocumenter(AttributeDocumenter):
+     """
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..b2ac64dc0 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -107,7 +107,22 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
+             parent = obj
+             logger.debug('[autodoc] getattr(_, %r)', attrname)
+             mangled_name = mangle(obj, attrname)
+-            obj = attrgetter(obj, mangled_name)
++            # Check if this is a class with a classmethod-wrapped property in __dict__
++            # to get the raw descriptor instead of the evaluated value
++            if isinstance(parent, type) and mangled_name in parent.__dict__:
++                member = parent.__dict__[mangled_name]
++                # Only get the raw descriptor if it's a classmethod-wrapped property
++                # (regular properties work fine with getattr)
++                if isinstance(member, classmethod):
++                    from sphinx.util.inspect import isproperty
++                    if isproperty(member):
++                        obj = member
++                    else:
++                        obj = attrgetter(obj, mangled_name)
++                else:
++                    obj = attrgetter(obj, mangled_name)
++            else:
++                obj = attrgetter(obj, mangled_name)
+ 
+             try:
+                 logger.debug('[autodoc] => %r', obj)
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 23dd9e930..e18aaa2a9 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -390,6 +390,11 @@ def isproperty(obj: Any) -> bool:
+         if isinstance(obj, cached_property):
+             return True
+ 
++    if isinstance(obj, classmethod):
++        # Check if the classmethod wraps a property (Python 3.9+ supports @classmethod @property)
++        obj = obj.__func__
++        return isinstance(obj, property)
++
+     return isinstance(obj, property)
+ 
+ 

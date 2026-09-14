@@ -1,0 +1,41 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -1,5 +1,6 @@
+ from django.db import migrations, models
+ from django.db.migrations import operations
++from django.db.migrations.operations.models import AlterTogetherOptionOperation
+ from django.db.migrations.optimizer import MigrationOptimizer
+ from django.db.migrations.serializer import serializer_factory
+ from django.test import SimpleTestCase
+@@ -209,7 +210,30 @@ class OptimizerTests(SimpleTestCase):
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),
+             migrations.AlterIndexTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_together_different_options_custom_operation(self):
++        """Different together options must remain independent."""
++        class CustomAlterTogetherOperation(AlterTogetherOptionOperation):
++            def __init__(self, name, option_name, option_value):
++                self.option_name = option_name
++                super().__init__(name, option_value)
++
++        unique_operation = CustomAlterTogetherOperation(
++            "Book", "unique_together", {("title",)},
++        )
++        index_operation = CustomAlterTogetherOperation(
++            "Book", "index_together", {("author",)},
++        )
++
++        optimized, _ = self.optimize(
++            [unique_operation, index_operation],
++            "migrations",
++        )
++        self.assertEqual(
++            [operation.option_name for operation in optimized],
++            ["unique_together", "index_together"],
++        )
++
+     def test_alter_alter_owrt_model(self):

@@ -1,0 +1,10 @@
+{
+  "test_name": "test_rolling_iter_uses_only_window_labels",
+  "specification_gap": "Fixing centered manual iteration must preserve the iterator's label domain: every yielded item must correspond to an existing `window_labels` entry, rather than synthesizing positional labels when the label sequence and rolled-axis length differ.",
+  "input_description": "Create a 5-by-2 DataArray through the public Dataset API with hashable integer rolling dimension `0`, then manually iterate over a size-3 centered rolling object with `min_periods=1`. Its observable `window_labels` values are `[0, 1]`.",
+  "expected_output": "The iterator yields exactly the declared labels `[0, 1]`. It must not append synthesized labels `[2, 3, 4]`.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "Both patches center ordinary windows equivalently. This boundary case isolates the generated candidate's additional mismatch fallback, which changes externally observable iterator labels instead of merely correcting window alignment.",
+  "test_patch": "diff --git a/xarray/tests/test_rolling.py b/xarray/tests/test_rolling.py\n--- a/xarray/tests/test_rolling.py\n+++ b/xarray/tests/test_rolling.py\n@@ -49,6 +49,18 @@ class TestDataArrayRolling:\n                     expected.values[expected.values.nonzero()],\n                 )\n \n+    def test_rolling_iter_uses_only_window_labels(self) -> None:\n+        da = Dataset(\n+            {\"values\": ((0, \"column\"), np.arange(10).reshape(5, 2))}\n+        )[\"values\"]\n+        rolling_obj = da.rolling({0: 3}, center=True, min_periods=1)\n+\n+        expected = [np.asarray(label).item() for label in rolling_obj.window_labels]\n+        actual = [np.asarray(label).item() for label, _ in rolling_obj]\n+\n+        assert expected == [0, 1]\n+        assert actual == expected\n+\n     @pytest.mark.parametrize(\"da\", (1,), indirect=True)\n     def test_rolling_repr(self, da) -> None:\n         rolling_obj = da.rolling(time=7)\n",
+  "test_command": "pytest -q xarray/tests/test_rolling.py::TestDataArrayRolling::test_rolling_iter_uses_only_window_labels"
+}

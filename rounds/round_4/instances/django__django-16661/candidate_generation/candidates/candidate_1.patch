@@ -1,0 +1,30 @@
+diff --git a/django/contrib/admin/options.py b/django/contrib/admin/options.py
+index 5240b07cd6..9381232072 100644
+--- a/django/contrib/admin/options.py
++++ b/django/contrib/admin/options.py
+@@ -466,12 +466,22 @@ class BaseModelAdmin(metaclass=forms.MediaDefiningClass):
+             # then the id value would be found already from employee__department_id.
+             if not prev_field or (
+                 prev_field.is_relation
+-                and field not in prev_field.path_infos[-1].target_fields
++                and (
++                    field not in prev_field.path_infos[-1].target_fields
++                    or (
++                        # Add the field if it's a relation that can be traversed,
++                        # even if it's in target_fields (e.g., OneToOneField as PK).
++                        # This includes fields with path_infos=[] (like PathlessOneToOneField).
++                        # Don't add if it's a non-traversable relation like
++                        # GenericForeignKey (path_infos=None).
++                        getattr(field, "path_infos", None) is not None
++                    )
++                )
+             ):
+                 relation_parts.append(part)
+             if not getattr(field, "path_infos", None):
+-                # This is not a relational field, so further parts
+-                # must be transforms.
++                # This is not a relational field (e.g., a target field such as
++                # the 'id' field), so further parts must be transforms.
+                 break
+             prev_field = field
+             model = field.path_infos[-1].to_opts.model

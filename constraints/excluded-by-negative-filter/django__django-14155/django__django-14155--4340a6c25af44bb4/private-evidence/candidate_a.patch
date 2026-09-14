@@ -1,0 +1,48 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index 9b00e24509..9463723bad 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -45,12 +45,22 @@ class ResolverMatch:
+         self.namespaces = [x for x in namespaces if x] if namespaces else []
+         self.namespace = ':'.join(self.namespaces)
+ 
+-        if not hasattr(func, '__name__'):
++        if isinstance(func, functools.partial):
++            # Unwrap functools.partial to get the underlying function
++            self._func_path = func.func.__module__ + '.' + func.func.__name__
++            # Store the partial's keywords for repr
++            self._partial_args = func.args
++            self._partial_keywords = func.keywords
++        elif not hasattr(func, '__name__'):
+             # A class-based view
+             self._func_path = func.__class__.__module__ + '.' + func.__class__.__name__
++            self._partial_args = ()
++            self._partial_keywords = {}
+         else:
+             # A function-based view
+             self._func_path = func.__module__ + '.' + func.__name__
++            self._partial_args = ()
++            self._partial_keywords = {}
+ 
+         view_path = url_name or self._func_path
+         self.view_name = ':'.join(self.namespaces + [view_path])
+@@ -59,8 +69,17 @@ class ResolverMatch:
+         return (self.func, self.args, self.kwargs)[index]
+ 
+     def __repr__(self):
+-        return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%s, app_names=%s, namespaces=%s, route=%s)" % (
+-            self._func_path, self.args, self.kwargs, self.url_name,
++        # Handle functools.partial specially
++        if isinstance(self.func, functools.partial):
++            func_repr = 'functools.partial(%s, %s)' % (
++                repr(self.func.func),
++                ', '.join('%s=%r' % (k, v) for k, v in self._partial_keywords.items()),
++            )
++        else:
++            func_repr = self._func_path
++
++        return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%r, app_names=%s, namespaces=%s, route=%r)" % (
++            func_repr, self.args, self.kwargs, self.url_name,
+             self.app_names, self.namespaces, self.route,
+         )
+ 

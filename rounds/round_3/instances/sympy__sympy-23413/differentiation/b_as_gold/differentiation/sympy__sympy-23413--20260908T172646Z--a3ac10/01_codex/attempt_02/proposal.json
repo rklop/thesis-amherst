@@ -1,0 +1,10 @@
+{
+  "test_name": "test_hermite_normal_tall_matrix_cursor_invariant",
+  "specification_gap": "For a tall, full-column-rank integer matrix, HNF must preserve every input row and stop pivot-column traversal when all columns are consumed, without entering a negative column state.",
+  "input_description": "Call the public hermite_normal_form API on Matrix([[0, 12], [0, 8], [1, 5]]), the issue's three-row/two-column boundary case, while a Python trace guard checks the pivot-column invariant.",
+  "expected_output": "Matrix([[12, 0], [8, 0], [0, 1]]). The pivot-column cursor must remain nonnegative throughout the computation.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "Both columns acquire pivots before every row has been visited. Candidate B stops when the cursor reaches zero; candidate A decrements it to -1 before breaking, violating the exhausted-column boundary invariant.",
+  "test_patch": "diff --git a/sympy/matrices/tests/test_normalforms.py b/sympy/matrices/tests/test_normalforms.py\n--- a/sympy/matrices/tests/test_normalforms.py\n+++ b/sympy/matrices/tests/test_normalforms.py\n@@ -79,3 +79,25 @@ def test_hermite_normal():\n     m = Matrix([[2, 7], [0, 0], [0, 0]])\n     hnf = Matrix(3, 0, [])\n     assert hermite_normal_form(m) == hnf\n+\n+\n+def test_hermite_normal_tall_matrix_cursor_invariant():\n+    import sys\n+\n+    m = Matrix([[0, 12], [0, 8], [1, 5]])\n+    expected = Matrix([[12, 0], [8, 0], [0, 1]])\n+\n+    def trace_hnf(frame, event, arg):\n+        if event == \"line\" and frame.f_code.co_name == \"_hermite_normal_form\":\n+            pivot_column = frame.f_locals.get(\"k\")\n+            if pivot_column is not None:\n+                assert pivot_column >= 0\n+        return trace_hnf\n+\n+    previous_trace = sys.gettrace()\n+    sys.settrace(trace_hnf)\n+    try:\n+        result = hermite_normal_form(m)\n+    finally:\n+        sys.settrace(previous_trace)\n+\n+    assert result == expected\n",
+  "test_command": "cd /testbed && python -m pytest -q sympy/matrices/tests/test_normalforms.py::test_hermite_normal_tall_matrix_cursor_invariant"
+}

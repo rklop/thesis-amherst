@@ -1,0 +1,35 @@
+diff --git a/tests/dbshell/test_postgresql.py b/tests/dbshell/test_postgresql.py
+--- a/tests/dbshell/test_postgresql.py
++++ b/tests/dbshell/test_postgresql.py
+@@ -4,7 +4,8 @@ import subprocess
+ from unittest import mock
+ 
+ from django.db.backends.postgresql.client import DatabaseClient
+ from django.test import SimpleTestCase
++from django.utils.functional import SimpleLazyObject
+ 
+ 
+ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
+@@ -37,6 +38,22 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
+                 'somepassword',
+             )
+         )
++
++    def test_lazy_sslmode_updates_sslkey(self):
++        dbinfo = {'database': 'dbname', 'sslkey': 'client-old.key'}
++
++        def resolve_sslmode():
++            dbinfo['sslkey'] = 'client-current.key'
++            return 'verify-ca'
++
++        dbinfo['sslmode'] = SimpleLazyObject(resolve_sslmode)
++        with mock.patch('subprocess.run') as run:
++            DatabaseClient.runshell_db(dbinfo)
++        env = run.call_args[1]['env']
++        self.assertEqual(
++            (env['PGSSLMODE'], env['PGSSLKEY']),
++            ('verify-ca', 'client-current.key'),
++        )
+ 
+     def test_nopass(self):
+         self.assertEqual(

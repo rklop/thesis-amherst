@@ -1,0 +1,10 @@
+{
+  "test_name": "test_empty_category_conversion_returns_independent_array",
+  "specification_gap": "An empty categorical conversion should produce an independent, shape-preserving float array, not a view backed by an unrelated temporary array.",
+  "input_description": "Configure an Axes x-axis with string categories, then pass an empty NumPy array of shape (0, 2) through the public Axes.convert_xunits entry point. Resize the returned array and populate it.",
+  "expected_output": "Conversion emits no warning under Matplotlib's warnings-as-errors test configuration and returns shape (0, 2). The result can be resized to (1, 2), populated with [[0, 1]], and read back successfully.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises the alternate public conversion entry point named in the issue and exposes the patches' only observable disagreement through a normal ndarray operation. candidate_a creates an independent result; candidate_b returns a reshape view whose in-place resize fails because it does not own its data. The corrected hunk was verified with git apply --check.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_category.py b/lib/matplotlib/tests/test_category.py\n--- a/lib/matplotlib/tests/test_category.py\n+++ b/lib/matplotlib/tests/test_category.py\n@@ -123,7 +123,19 @@ class TestStrCategoryConverter:\n         assert isinstance(axis.majfmt, cat.StrCategoryFormatter)\n \n     def test_default_units(self):\n         assert isinstance(self.cc.default_units([\"a\"], self.ax), cat.UnitData)\n \n \n+def test_empty_category_conversion_returns_independent_array():\n+    ax = plt.figure().subplots()\n+    ax.xaxis.update_units([\"a\"])\n+\n+    converted = ax.convert_xunits(np.empty((0, 2)))\n+    assert converted.shape == (0, 2)\n+\n+    converted.resize((1, 2))\n+    converted[:] = [[0, 1]]\n+    np.testing.assert_array_equal(converted, [[0, 1]])\n+\n+\n PLOT_LIST = [Axes.scatter, Axes.plot, Axes.bar]\n",
+  "test_command": "python -m pytest -q lib/matplotlib/tests/test_category.py::test_empty_category_conversion_returns_independent_array"
+}

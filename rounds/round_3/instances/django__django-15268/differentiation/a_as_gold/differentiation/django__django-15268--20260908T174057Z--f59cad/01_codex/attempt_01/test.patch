@@ -1,0 +1,34 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -205,6 +205,31 @@ class OptimizerTests(SimpleTestCase):
+             migrations.AlterUniqueTogether("Foo", [["a", "b"]]),
+             migrations.AlterUniqueTogether("Foo", [["a", "c"]]),
+         )
++
++    def test_alter_together_custom_option_name_type(self):
++        class OptionName(str):
++            def __eq__(self, other):
++                if isinstance(other, OptionName):
++                    return self is other
++                return super().__eq__(other)
++
++            def __ne__(self, other):
++                return not self == other
++
++            __hash__ = str.__hash__
++
++        class CustomAlterUniqueTogether(migrations.AlterUniqueTogether):
++            def __init__(self, name, unique_together):
++                super().__init__(name, unique_together)
++                self.option_name = OptionName(self.option_name)
++
++        first = CustomAlterUniqueTogether("Foo", [["a", "b"]])
++        second = CustomAlterUniqueTogether("Foo", [["a", "c"]])
++        self.assertEqual(str(first.option_name), str(second.option_name))
++
++        optimized, _ = self.optimize([first, second], "migrations")
++        self.assertEqual(optimized, [second])
+ 
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(

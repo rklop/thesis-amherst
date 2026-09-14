@@ -1,0 +1,10 @@
+{
+  "test_name": "FormsTestCase.test_custom_boundfield",
+  "specification_gap": "Customizing Field.get_bound_field() must not make validation of an enabled, non-file field depend on the returned presentation object exposing concrete BoundField attributes. The initial-value consistency fix should preserve this existing extension-point behavior.",
+  "input_description": "A bound form containing an ordinary CharField whose get_bound_field() hook returns a custom tuple, with submitted data {'name': 'Alice'}.",
+  "expected_output": "The custom object remains available through form['name'], form.is_valid() returns True without raising an exception, and cleaned_data equals {'name': 'Alice'}.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "The repository already tests that get_bound_field() may customize the object returned by form[name]. Candidate B's broader cleaning refactor dereferences .field on that object and raises AttributeError, while candidate A preserves ordinary field cleaning and only uses BoundField caching for the initial values implicated by the issue.",
+  "test_patch": "diff --git a/tests/forms_tests/tests/test_forms.py b/tests/forms_tests/tests/test_forms.py\n--- a/tests/forms_tests/tests/test_forms.py\n+++ b/tests/forms_tests/tests/test_forms.py\n@@ -2076,6 +2076,11 @@ class FormsTestCase(SimpleTestCase):\n \n         f = SampleForm()\n         self.assertEqual(f['name'], (f, 'name'))\n+\n+        f = SampleForm({'name': 'Alice'})\n+        self.assertEqual(f['name'], (f, 'name'))\n+        self.assertTrue(f.is_valid())\n+        self.assertEqual(f.cleaned_data, {'name': 'Alice'})\n \n     def test_initial_datetime_values(self):\n         now = datetime.datetime.now()\n",
+  "test_command": "./tests/runtests.py forms_tests.tests.test_forms.FormsTestCase.test_custom_boundfield"
+}

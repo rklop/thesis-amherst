@@ -1,0 +1,34 @@
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -240,7 +240,30 @@ class GetChoicesOrderingTests(TestCase):
+             self.field.get_choices(include_blank=False, ordering=('-a',)),
+             [self.foo2, self.foo1]
+         )
++
++    def test_get_choices_ordering_is_stable_during_filtering(self):
++        ordering = ['a']
++
++        class MutatingLimitChoicesTo:
++            def __bool__(self):
++                return True
++
++            def keys(self):
++                ordering[:] = ['-a']
++                return ()
++
++            def __getitem__(self, key):
++                raise KeyError(key)
++
++        self.assertChoicesEqual(
++            self.field.get_choices(
++                include_blank=False,
++                limit_choices_to=MutatingLimitChoicesTo(),
++                ordering=ordering,
++            ),
++            [self.foo1, self.foo2],
++        )
+ 
+     def test_get_choices_reverse_related_field(self):
+         self.assertChoicesEqual(
+             self.field.remote_field.get_choices(include_blank=False, ordering=('a',)),

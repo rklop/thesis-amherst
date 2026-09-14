@@ -1,0 +1,10 @@
+{
+  "test_name": "test_min_count_python_scalar_object_result",
+  "specification_gap": "Object dtype is outside the documented skipna support, so enabling multi-dimensional min_count must not additionally coerce a Python scalar object result to floating-point NaN. The supplied gold preserves such scalar-like results; the generated candidate does not.",
+  "input_description": "Create a 1\u00d72 object DataArray containing Decimal(\"1\") and None, then sum over both dimensions with skipna=True and min_count=2.",
+  "expected_output": "The zero-dimensional result retains Decimal(\"1\"); result.item() equals Decimal(\"1\") rather than NaN.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises the public multi-dimensional sum API at an object-result boundary omitted by the floating-point example. Decimal ensures the aggregate is a Python scalar without a dtype attribute, directly exposing the generated candidate\u2019s missing scalar guard.",
+  "test_patch": "diff --git a/xarray/tests/test_duck_array_ops.py b/xarray/tests/test_duck_array_ops.py\n--- a/xarray/tests/test_duck_array_ops.py\n+++ b/xarray/tests/test_duck_array_ops.py\n@@ -603,7 +603,18 @@ def test_min_count_dataset(func):\n     expected = getattr(ds[\"var1\"], func)(dim=\"x\", skipna=True, min_count=3)\n     assert_allclose(actual, expected)\n \n \n+def test_min_count_python_scalar_object_result():\n+    from decimal import Decimal\n+\n+    da = DataArray(\n+        np.array([[Decimal(\"1\"), None]], dtype=object), dims=(\"x\", \"y\")\n+    )\n+    actual = da.sum((\"x\", \"y\"), skipna=True, min_count=2)\n+\n+    assert actual.item() == Decimal(\"1\")\n+\n+\n @pytest.mark.parametrize(\"dtype\", [float, int, np.float32, np.bool_])\n @pytest.mark.parametrize(\"dask\", [False, True])\n @pytest.mark.parametrize(\"func\", [\"sum\", \"prod\"])\n",
+  "test_command": "python -m pytest -q xarray/tests/test_duck_array_ops.py::test_min_count_python_scalar_object_result"
+}

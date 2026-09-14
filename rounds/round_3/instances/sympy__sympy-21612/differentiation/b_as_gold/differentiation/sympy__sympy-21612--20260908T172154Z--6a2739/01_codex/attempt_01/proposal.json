@@ -1,0 +1,10 @@
+{
+  "test_name": "test_Mul_nested_Pow_indeterminate_sign",
+  "specification_gap": "When printing a reciprocal whose denominator is itself a power, parentheses should be added only when the inner exponent is definitely negative. A symbolic, indeterminate sign predicate must not be coerced to a Python truth value.",
+  "input_description": "Construct an unevaluated expression y/(x**e), where e is a commutative Expr subclass whose is_negative property returns the unresolved relation x < 0, then call the public str() printer.",
+  "expected_output": "str() returns exactly \"y/x**ConditionalExponent()\" without raising an exception. The inner power remains unparenthesized because its exponent is not definitely negative.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the same nested-reciprocal printer path through direct public expression construction. Candidate_a truth-tests the unresolved relational sign and raises TypeError, whereas candidate_b only treats literal True as a definite negative sign.",
+  "test_patch": "diff --git a/sympy/printing/tests/test_str.py b/sympy/printing/tests/test_str.py\n--- a/sympy/printing/tests/test_str.py\n+++ b/sympy/printing/tests/test_str.py\n@@ -268,6 +268,20 @@ def test_Mul():\n     assert str(cc2*Rational(2)*cc1) == '2*CustomClass1()*CustomClass2()'\n     assert str(cc1*Rational(2)*cc2) == '2*CustomClass1()*CustomClass2()'\n \n \n+def test_Mul_nested_Pow_indeterminate_sign():\n+    class ConditionalExponent(Expr):\n+        is_commutative = True\n+\n+        @property\n+        def is_negative(self):\n+            return x < 0\n+\n+    exponent = ConditionalExponent()\n+    denominator = Pow(x, exponent, evaluate=False)\n+    reciprocal = Pow(denominator, -1, evaluate=False)\n+    assert str(Mul(y, reciprocal, evaluate=False)) == 'y/x**ConditionalExponent()'\n+\n+\n def test_NaN():\n     assert str(nan) == \"nan\"\n",
+  "test_command": "cd /testbed && python -m pytest -q sympy/printing/tests/test_str.py::test_Mul_nested_Pow_indeterminate_sign"
+}

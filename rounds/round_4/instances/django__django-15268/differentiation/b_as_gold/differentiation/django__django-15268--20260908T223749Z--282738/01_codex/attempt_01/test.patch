@@ -1,0 +1,54 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -1,6 +1,7 @@
+ from django.db import migrations, models
+ from django.db.migrations import operations
+ from django.db.migrations.optimizer import MigrationOptimizer
+ from django.db.migrations.serializer import serializer_factory
++from django.db.migrations.state import ModelState, ProjectState
+ from django.test import SimpleTestCase
+ 
+@@ -209,7 +210,41 @@ class OptimizerTests(SimpleTestCase):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),
+             migrations.AlterIndexTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_together_subclass_different_option(self):
++        """Operations affecting different options cannot replace each other."""
++        class AlterIndexTogetherSubclass(migrations.AlterUniqueTogether):
++            option_name = "index_together"
++
++            def __init__(self, name, index_together):
++                super().__init__(name, index_together)
++
++        state = ProjectState()
++        state.add_model(ModelState(
++            "migrations",
++            "Book",
++            [
++                ("id", models.AutoField(primary_key=True)),
++                ("title", models.CharField(max_length=20)),
++            ],
++        ))
++        optimized, _ = self.optimize(
++            [
++                migrations.AlterUniqueTogether("Book", {("title",)}),
++                AlterIndexTogetherSubclass("Book", {("title",)}),
++            ],
++            "migrations",
++        )
++        for operation in optimized:
++            operation.state_forwards("migrations", state)
++        self.assertEqual(
++            state.models["migrations", "book"].options,
++            {
++                "unique_together": {("title",)},
++                "index_together": {("title",)},
++            },
++        )
++
+     def test_alter_alter_owrt_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterOrderWithRespectTo("Foo", "a"),

@@ -1,0 +1,63 @@
+diff --git a/tests/backends/mysql/tests.py b/tests/backends/mysql/tests.py
+--- a/tests/backends/mysql/tests.py
++++ b/tests/backends/mysql/tests.py
+@@ -1,5 +1,8 @@
++import sys
+ import unittest
+ from contextlib import contextmanager
++from types import ModuleType
++from unittest import mock
+ 
+ from django.core.exceptions import ImproperlyConfigured
+ from django.db import connection
+@@ -11,6 +14,48 @@ def get_connection():
+     new_connection = connection.copy()
+     yield new_connection
+     new_connection.close()
+ 
+ 
++class DatabaseWrapperTests(unittest.TestCase):
++
++    def test_empty_options_preserve_top_level_credentials(self):
++        database_module = ModuleType('MySQLdb')
++        database_module.__path__ = []
++        database_module.version_info = (2, 0, 0)
++        database_module.__version__ = '2.0.0'
++        constants_module = ModuleType('MySQLdb.constants')
++        constants_module.CLIENT = mock.Mock(FOUND_ROWS=2)
++        constants_module.FIELD_TYPE = mock.Mock()
++        converters_module = ModuleType('MySQLdb.converters')
++        converters_module.conversions = {}
++
++        with mock.patch.dict(sys.modules, {
++            'MySQLdb': database_module,
++            'MySQLdb.constants': constants_module,
++            'MySQLdb.converters': converters_module,
++        }):
++            from django.db.backends.mysql.base import DatabaseWrapper
++
++            settings_dict = {
++                'NAME': 'configured_db',
++                'USER': '',
++                'PASSWORD': 'secret',
++                'HOST': '',
++                'PORT': '',
++                'OPTIONS': {},
++            }
++            params = DatabaseWrapper(settings_dict).get_connection_params()
++
++        self.assertEqual(
++            {
++                'database': params['database'],
++                'password': params['password'],
++            },
++            {
++                'database': 'configured_db',
++                'password': 'secret',
++            },
++        )
++
++
+ @override_settings(DEBUG=True)
+ @unittest.skipUnless(connection.vendor == 'mysql', 'MySQL tests')
+ class IsolationLevelTests(TestCase):

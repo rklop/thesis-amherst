@@ -1,0 +1,10 @@
+{
+  "test_name": "test_RSTParser_prolog_precedes_indented_body_field",
+  "specification_gap": "Only a top-level field list is document metadata that may precede rst_prolog. An indented field list is body content, so it must remain after the prolog.",
+  "input_description": "Publish reStructuredText beginning with the indented field `   :note: nested field`, while rst_prolog contains the visible paragraph `Prolog paragraph.`.",
+  "expected_output": "The first document block is `Prolog paragraph.` and the following block contains `nested field`.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "candidate_a treats leading whitespace as part of a docinfo match and moves the indented body field ahead of rst_prolog. The test uses Sphinx's complete publication helper, correcting the previous proposal's invalid bare-document parser setup.",
+  "test_patch": "diff --git a/tests/test_parser.py b/tests/test_parser.py\n--- a/tests/test_parser.py\n+++ b/tests/test_parser.py\n@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch\n import pytest\n \n from sphinx.parsers import RSTParser\n+from sphinx.testing.restructuredtext import parse as parse_rst\n from sphinx.util.docutils import new_document\n \n \n@@ -55,3 +56,14 @@ def test_RSTParser_prolog_epilog(RSTStateMachine, app):\n     (content, _), _ = RSTStateMachine().run.call_args\n     assert list(content.xitems()) == [('dummy.rst', 0, '        hello Sphinx world'),\n                                       ('dummy.rst', 1, '  Sphinx is a document generator')]\n+\n+\n+@pytest.mark.sphinx(testroot='basic')\n+def test_RSTParser_prolog_precedes_indented_body_field(app):\n+    app.env.config.rst_prolog = 'Prolog paragraph.'\n+\n+    document = parse_rst(app, '   :note: nested field\\n')\n+\n+    assert document[0].astext() == 'Prolog paragraph.'\n+    assert 'nested field' in document[1].astext()\n",
+  "test_command": "python -m pytest -q tests/test_parser.py::test_RSTParser_prolog_precedes_indented_body_field"
+}

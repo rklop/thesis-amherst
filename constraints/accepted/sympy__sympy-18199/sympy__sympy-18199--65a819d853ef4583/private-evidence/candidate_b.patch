@@ -1,0 +1,234 @@
+diff --git a/sympy/ntheory/residue_ntheory.py b/sympy/ntheory/residue_ntheory.py
+index 9a3052d4c3..7365263c54 100644
+--- a/sympy/ntheory/residue_ntheory.py
++++ b/sympy/ntheory/residue_ntheory.py
+@@ -743,6 +743,142 @@ def _nthroot_mod1(s, q, p, all_roots):
+     return min(res)
+ 
+ 
++def _nthroot_mod_prime_power(a, n, p, k, all_roots):
++    """
++    Find the solutions to x**n = a mod p**k where p is prime.
++    """
++    from sympy.ntheory.residue_ntheory import nthroot_mod as nthroot_mod_prime
++    p_k = p**k
++    
++    # Handle a = 0 case
++    if a % p_k == 0:
++        # x^n = 0 mod p^k means x must have at least ceil(k/n) factors of p
++        min_exp = (k + n - 1) // n  # ceiling of k/n
++        roots = []
++        for t in range(p_k):
++            x = (p**min_exp * t) % p_k
++            if x not in roots and pow(x, n, p_k) == 0:
++                roots.append(x)
++        if all_roots:
++            return sorted(roots)
++        return min(roots) if roots else None
++    
++    # For a != 0 mod p^k
++    # Reduce to the case of prime modulus using Hensel lifting
++    # First find root modulo p, then lift
++    if k == 1:
++        # Modulo p is simple - use existing logic
++        return nthroot_mod_prime(a, n, p, all_roots)
++    
++    # For k > 1, we use the prime power factorization
++    # The equation x^n = a mod p^k has solutions iff:
++    # 1. a is an n-th power residue modulo p, and
++    # 2. If p divides a, then the multiplicity condition is met
++    
++    # First check if solution exists modulo p
++    a_mod_p = a % p
++    roots_mod_p = nthroot_mod_prime(a_mod_p, n, p, all_roots=True)
++    if roots_mod_p is None or len(roots_mod_p) == 0:
++        return [] if all_roots else None
++    
++    # Hensel lift each root
++    # Ensure roots is a list
++    if isinstance(roots_mod_p, list):
++        roots = roots_mod_p
++    else:
++        roots = [roots_mod_p]
++    for i in range(1, k):
++        new_roots = []
++        p_i = p**i
++        p_i1 = p_i * p
++        for r in roots:
++            # Try to lift r to modulo p^(i+1)
++            # We need to find r + t*p^i such that (r + t*p^i)^n = a mod p^(i+1)
++            # Using Taylor expansion: (r + t*p^i)^n = r^n + n*r^(n-1)*t*p^i mod p^(i+1)
++            # So we need: r^n + n*r^(n-1)*t*p^i ≡ a (mod p^(i+1))
++            # => r^n - a + n*r^(n-1)*t*p^i ≡ 0 (mod p^(i+1))
++            # Let diff = (r^n - a) mod p^(i+1)
++            diff = (pow(r, n, p_i1) - a) % p_i1
++            if diff == 0:
++                # All t values might work, but verify each one
++                for t in range(p):
++                    new_r = r + t * p_i
++                    new_r_mod = new_r % p_i1
++                    # Verify the lifted root actually satisfies the equation
++                    if pow(new_r_mod, n, p_i1) == a % p_i1:
++                        new_roots.append(new_r_mod)
++            else:
++                # Need to solve: diff + n*r^(n-1)*t*p^i ≡ 0 (mod p^(i+1))
++                # => diff/p^i + n*r^(n-1)*t ≡ 0 (mod p)
++                # Let diff_i = diff // p^i (should be divisible by p^i but not p^(i+1))
++                if diff % p_i == 0:
++                    diff_i = diff // p_i
++                    # Need n*r^(n-1)*t ≡ -diff_i (mod p)
++                    try:
++                        coeff = (n * pow(r, n-1, p)) % p
++                        coeff_inv = mod_inverse(coeff, p)
++                        t = ((-diff_i) * coeff_inv) % p
++                        new_r = r + t * p_i
++                        new_roots.append(new_r % p_i1)
++                    except:
++                        pass
++        roots = new_roots
++        if not roots:
++            return [] if all_roots else None
++    
++    if all_roots:
++        return sorted(roots)
++    return min(roots) if roots else None
++
++
++def _nthroot_mod_composite(a, n, p, all_roots):
++    """
++    Find the solutions to x**n = a mod p where p is composite.
++    Uses Chinese Remainder Theorem to combine prime power factors.
++    """
++    from sympy.ntheory.modular import crt
++    from sympy.ntheory.factor_ import factorint
++    
++    # Factor p into prime powers
++    fac = factorint(p)
++    prime_powers = []
++    for prime, exp in fac.items():
++        prime_powers.append((prime, exp))
++    
++    # Solve modulo each prime power
++    all_solutions = []
++    first = True
++    for prime, exp in prime_powers:
++        p_k = prime**exp
++        roots = _nthroot_mod_prime_power(a, n, prime, exp, all_roots=True)
++        
++        if roots is None or (isinstance(roots, list) and len(roots) == 0):
++            return []
++        
++        if first:
++            all_solutions = [(r, p_k) for r in roots]
++            first = False
++        else:
++            new_solutions = []
++            for r1, m1 in all_solutions:
++                for r2 in roots:
++                    # Combine using CRT
++                    result = crt([m1, p_k], [r1, r2], check=False)
++                    if result is not None:
++                        new_solutions.append((result[0], m1 * p_k))
++            all_solutions = new_solutions
++            if not all_solutions:
++                return []
++    
++    if not all_solutions:
++        return []
++    if all_roots:
++        return sorted([s[0] for s in all_solutions])
++    # For composite modulus, always return a list (for consistency)
++    res = min([s[0] for s in all_solutions])
++    return [res]
++
++
+ def nthroot_mod(a, n, p, all_roots=False):
+     """
+     Find the solutions to ``x**n = a mod p``
+@@ -770,41 +906,53 @@ def nthroot_mod(a, n, p, all_roots=False):
+     a, n, p = as_int(a), as_int(n), as_int(p)
+     if n == 2:
+         return sqrt_mod(a, p, all_roots)
+-    # see Hackman "Elementary Number Theory" (2009), page 76
+-    if not is_nthpow_residue(a, n, p):
+-        return None
+-    if not isprime(p):
+-        raise NotImplementedError("Not implemented for composite p")
+-
+-    if (p - 1) % n == 0:
+-        return _nthroot_mod1(a, n, p, all_roots)
+-    # The roots of ``x**n - a = 0 (mod p)`` are roots of
+-    # ``gcd(x**n - a, x**(p - 1) - 1) = 0 (mod p)``
+-    pa = n
+-    pb = p - 1
+-    b = 1
+-    if pa < pb:
+-        a, pa, b, pb = b, pb, a, pa
+-    while pb:
+-        # x**pa - a = 0; x**pb - b = 0
+-        # x**pa - a = x**(q*pb + r) - a = (x**pb)**q * x**r - a =
+-        #             b**q * x**r - a; x**r - c = 0; c = b**-q * a mod p
+-        q, r = divmod(pa, pb)
+-        c = pow(b, q, p)
+-        c = igcdex(c, p)[0]
+-        c = (c * a) % p
+-        pa, pb = pb, r
+-        a, b = b, c
+-    if pa == 1:
+-        if all_roots:
+-            res = [a]
++    
++    # Handle a = 0 case
++    if a % p == 0:
++        # x^n = 0 mod p - need to find all roots
++        if isprime(p):
++            return _nthroot_mod_prime_power(a, n, p, 1, all_roots)
+         else:
+-            res = a
+-    elif pa == 2:
+-        return sqrt_mod(a, p , all_roots)
++            return _nthroot_mod_composite(a, n, p, all_roots)
++    
++    # For composite modulus, we don't rely on is_nthpow_residue
++    # because it may not work correctly for all composite moduli
++    if isprime(p):
++        # see Hackman "Elementary Number Theory" (2009), page 76
++        if not is_nthpow_residue(a, n, p):
++            return None
++        if (p - 1) % n == 0:
++            return _nthroot_mod1(a, n, p, all_roots)
++        # The roots of ``x**n - a = 0 (mod p)`` are roots of
++        # ``gcd(x**n - a, x**(p - 1) - 1) = 0 (mod p)``
++        pa = n
++        pb = p - 1
++        b = 1
++        if pa < pb:
++            a, pa, b, pb = b, pb, a, pa
++        while pb:
++            # x**pa - a = 0; x**pb - b = 0
++            # x**pa - a = x**(q*pb + r) - a = (x**pb)**q * x**r - a =
++            #             b**q * x**r - a; x**r - c = 0; c = b**-q * a mod p
++            q, r = divmod(pa, pb)
++            c = pow(b, q, p)
++            c = igcdex(c, p)[0]
++            c = (c * a) % p
++            pa, pb = pb, r
++            a, b = b, c
++        if pa == 1:
++            if all_roots:
++                res = [a]
++            else:
++                res = a
++        elif pa == 2:
++            return sqrt_mod(a, p , all_roots)
++        else:
++            res = _nthroot_mod1(a, pa, p, all_roots)
++        return res
+     else:
+-        res = _nthroot_mod1(a, pa, p, all_roots)
+-    return res
++        # Composite modulus
++        return _nthroot_mod_composite(a, n, p, all_roots)
+ 
+ 
+ def quadratic_residues(p):

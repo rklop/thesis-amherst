@@ -1,0 +1,34 @@
+diff --git a/tests/messages_tests/tests.py b/tests/messages_tests/tests.py
+--- a/tests/messages_tests/tests.py
++++ b/tests/messages_tests/tests.py
+@@ -1,8 +1,10 @@
+ from unittest import mock
+ 
+ from django.contrib.messages import constants
++from django.contrib.messages.storage import base
+ from django.contrib.messages.storage.base import Message
+-from django.test import SimpleTestCase
++from django.core.signals import setting_changed
++from django.test import SimpleTestCase, override_settings
+ 
+ 
+ class MessageTests(SimpleTestCase):
+@@ -13,5 +15,18 @@ class MessageTests(SimpleTestCase):
+         self.assertEqual(msg_1, msg_1)
+         self.assertEqual(msg_1, mock.ANY)
+         self.assertNotEqual(msg_1, msg_2)
+         self.assertNotEqual(msg_1, msg_3)
+         self.assertNotEqual(msg_2, msg_3)
++
++    def test_update_level_tags_accepts_positional_setting(self):
++        outer_tags = {constants.INFO: 'outer'}
++        inner_tags = {constants.INFO: 'inner'}
++        with override_settings(MESSAGE_TAGS=outer_tags):
++            setting_changed.disconnect(base.update_level_tags)
++            try:
++                with override_settings(MESSAGE_TAGS=inner_tags):
++                    base.update_level_tags('MESSAGE_TAGS')
++                    message = Message(constants.INFO, 'message')
++                    self.assertEqual(message.level_tag, 'inner')
++            finally:
++                setting_changed.connect(base.update_level_tags)

@@ -1,0 +1,23 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index d69c24419b..6912b717f7 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1666,7 +1666,18 @@ class Query(BaseExpression):
+             filter_expr = (filter_lhs, OuterRef(filter_rhs.name))
+         # Generate the inner query.
+         query = Query(self.model)
++        query._filtered_relations = self._filtered_relations.copy()
+         query.add_filter(filter_expr)
++        # Add the filtered relation's condition to the subquery's WHERE clause
++        for alias, filtered_relation in query._filtered_relations.items():
++            if alias in query.alias_map:
++                # Get the join path
++                join_path = [alias]
++                # Add the filtered relation's condition to the WHERE clause
++                filtered_relation_q = query.build_filtered_relation_q(
++                    filtered_relation.condition, reuse=set(join_path)
++                )
++                query.where.add(filtered_relation_q, AND)
+         query.clear_ordering(True)
+         # Try to have as simple as possible subquery -> trim leading joins from
+         # the subquery.

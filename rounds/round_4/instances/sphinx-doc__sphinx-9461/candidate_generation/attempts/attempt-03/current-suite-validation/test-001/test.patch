@@ -1,0 +1,43 @@
+diff --git a/tests/roots/test-ext-autodoc/target/properties.py b/tests/roots/test-ext-autodoc/target/properties.py
+--- a/tests/roots/test-ext-autodoc/target/properties.py
++++ b/tests/roots/test-ext-autodoc/target/properties.py
+@@ -1,6 +1,12 @@
+ class Foo:
+     """docstring"""
+ 
+     @property
+     def prop(self) -> int:
+         """docstring"""
++
++    @classmethod
++    @property
++    def classprop(cls) -> str:
++        """class property docstring"""
++        return 'class property value'
+diff --git a/tests/test_ext_autodoc_autoproperty.py b/tests/test_ext_autodoc_autoproperty.py
+--- a/tests/test_ext_autodoc_autoproperty.py
++++ b/tests/test_ext_autodoc_autoproperty.py
+@@ -25,4 +25,23 @@ def test_properties(app):
+         '',
+         '   docstring',
+         '',
+     ]
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_class_property_uses_registered_attrgetter(app):
++    from target.properties import Foo
++
++    lookups = []
++
++    def recording_getattr(obj, name, *default):
++        if obj is Foo and name == 'classprop':
++            lookups.append((obj, name))
++        return getattr(obj, name, *default)
++
++    app.add_autodoc_attrgetter(type, recording_getattr)
++    actual = list(do_autodoc(app, 'property', 'target.properties.Foo.classprop'))
++
++    assert '.. py:property:: Foo.classprop' in actual
++    assert '   class property docstring' in actual
++    assert (Foo, 'classprop') in lookups

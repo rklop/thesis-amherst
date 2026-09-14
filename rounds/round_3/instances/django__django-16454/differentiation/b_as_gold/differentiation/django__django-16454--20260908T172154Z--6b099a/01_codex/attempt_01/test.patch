@@ -1,0 +1,38 @@
+diff --git a/tests/user_commands/tests.py b/tests/user_commands/tests.py
+--- a/tests/user_commands/tests.py
++++ b/tests/user_commands/tests.py
+@@ -9,6 +9,7 @@ from django.apps import apps
+ from django.core import management
+ from django.core.checks import Tags
+ from django.core.management import BaseCommand, CommandError, find_commands
++from django.core.management.base import CommandParser
+ from django.core.management.utils import (
+     find_command,
+     get_random_secret_key,
+@@ -406,6 +407,25 @@ class CommandTests(SimpleTestCase):
+         with self.assertRaisesMessage(CommandError, msg):
+             management.call_command("subparser_dest", subcommand="foo", bar=12)
+ 
++    def test_subparser_custom_parser_default_error_mode(self):
++        class CommandLineParser(CommandParser):
++            def __init__(self, *, called_from_command_line=True, **kwargs):
++                super().__init__(
++                    called_from_command_line=called_from_command_line, **kwargs
++                )
++
++        parser = CommandParser(prog="manage.py cheeses")
++        subparsers = parser.add_subparsers(parser_class=CommandLineParser)
++        create_parser = subparsers.add_parser("create")
++        create_parser.add_argument("name")
++
++        with captured_stderr() as stderr, self.assertRaises(SystemExit) as cm:
++            parser.parse_args(["create"])
++
++        self.assertEqual(cm.exception.code, 2)
++        output = stderr.getvalue()
++        self.assertIn("usage: manage.py cheeses create", output)
++        self.assertIn("the following arguments are required: name", output)
++
+     def test_create_parser_kwargs(self):
+         """BaseCommand.create_parser() passes kwargs to CommandParser."""
+         epilog = "some epilog text"

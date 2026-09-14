@@ -1,0 +1,54 @@
+diff --git a/xarray/core/rolling.py b/xarray/core/rolling.py
+index aef290f6..c38e2d3e 100644
+--- a/xarray/core/rolling.py
++++ b/xarray/core/rolling.py
+@@ -270,16 +270,41 @@ class DataArrayRolling(Rolling["DataArray"]):
+     def __iter__(self) -> Iterator[tuple[RollingKey, DataArray]]:
+         if self.ndim > 1:
+             raise ValueError("__iter__ is only supported for 1d-rolling")
+-        stops = np.arange(1, len(self.window_labels) + 1)
+-        starts = stops - int(self.window[0])
+-        starts[: int(self.window[0])] = 0
+-        for (label, start, stop) in zip(self.window_labels, starts, stops):
+-            window = self.obj.isel({self.dim[0]: slice(start, stop)})
+ 
+-            counts = window.count(dim=self.dim[0])
+-            window = window.where(counts >= self.min_periods)
++        dim0 = self.dim[0]
++        window = int(self.window[0])
++        
++        # Determine the number of iterations - use dimension size if window_labels
++        # doesn't match (handles hashable integer dimensions), otherwise use window_labels
++        dim_size = self.obj.sizes[dim0]
++        if len(self.window_labels) != dim_size:
++            # window_labels is wrong (e.g., due to hashable integer dimension)
++            n = dim_size
++        else:
++            n = len(self.window_labels)
++
++        for i in range(n):
++            label = self.window_labels[i] if i < len(self.window_labels) else i
++            if self.center[0]:
++                # For centered windows, we use a fixed window size centered on the position
++                # Use window // 2 as offset for correct centering (handles both odd and even)
++                start = i - window // 2
++                stop = start + window
++            else:
++                # For non-centered windows, grow the window from the start
++                start = max(0, i - window + 1)
++                stop = i + 1
++
++            # Clip to valid range - this allows partial windows at boundaries
++            start = max(start, 0)
++            stop = min(stop, dim_size)
++
++            window_da = self.obj.isel({dim0: slice(start, stop)})
++
++            counts = window_da.count(dim=dim0)
++            window_da = window_da.where(counts >= self.min_periods)
+ 
+-            yield (label, window)
++            yield (label, window_da)
+ 
+     def construct(
+         self,

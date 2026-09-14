@@ -1,0 +1,51 @@
+diff --git a/tests/roots/test-ext-autodoc/target/properties.py b/tests/roots/test-ext-autodoc/target/properties.py
+--- a/tests/roots/test-ext-autodoc/target/properties.py
++++ b/tests/roots/test-ext-autodoc/target/properties.py
+@@ -1,6 +1,19 @@
+ class Foo:
+     """docstring"""
+ 
+     @property
+     def prop(self) -> int:
+         """docstring"""
++
++
++class_property_getter_calls = 0
++
++
++class SideEffectClassProperty:
++    @classmethod
++    @property
++    def value(cls) -> int:
++        """class property docstring"""
++        global class_property_getter_calls
++        class_property_getter_calls += 1
++        return 42
+diff --git a/tests/test_ext_autodoc_autoproperty.py b/tests/test_ext_autodoc_autoproperty.py
+--- a/tests/test_ext_autodoc_autoproperty.py
++++ b/tests/test_ext_autodoc_autoproperty.py
+@@ -20,9 +20,25 @@ def test_properties(app):
+     assert list(actual) == [
+         '',
+         '.. py:property:: Foo.prop',
+         '   :module: target.properties',
+         '   :type: int',
+         '',
+         '   docstring',
+         '',
+     ]
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_class_property_getter_is_not_evaluated(app):
++    from target import properties
++    properties.class_property_getter_calls = 0
++
++    actual = do_autodoc(
++        app, 'property', 'target.properties.SideEffectClassProperty.value')
++    lines = list(actual)
++
++    assert any('py:property:: SideEffectClassProperty.value' in line for line in lines)
++    assert any(':classmethod:' in line for line in lines)
++    assert any('class property docstring' in line for line in lines)
++    assert properties.class_property_getter_calls == 0

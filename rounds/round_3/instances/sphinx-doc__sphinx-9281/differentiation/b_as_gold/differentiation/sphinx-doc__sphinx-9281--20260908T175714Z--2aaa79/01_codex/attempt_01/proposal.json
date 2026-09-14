@@ -1,0 +1,10 @@
+{
+  "test_name": "test_signature_enum_default_uses_public_name",
+  "specification_gap": "Enum defaults in rendered signatures should use the member's public `name` attribute, including supported overrides, rather than private `_name_` storage.",
+  "input_description": "Render the signature of a function whose default is `AliasedState.READY`. The Enum's public `name` property selects `available`, a valid alias of the same member.",
+  "expected_output": "The rendered signature is `(state=AliasedState.available)`. The designated gold patch uses the public name and passes; the generated candidate reads `_name_` and instead renders `AliasedState.READY`.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This tests the issue through its observable signature-rendering path and establishes a narrow public-API invariant without asserting Sphinx's implementation details.",
+  "test_patch": "diff --git a/tests/test_util_inspect.py b/tests/test_util_inspect.py\n--- a/tests/test_util_inspect.py\n+++ b/tests/test_util_inspect.py\n@@ -10,6 +10,7 @@\n \n import ast\n import datetime\n+import enum\n import functools\n import sys\n import types\n@@ -63,7 +64,22 @@ def test_signature():\n         pass\n \n     sig = inspect.stringify_signature(inspect.signature(func))\n     assert sig == '(a, b, c=1, d=2, *e, **f)'\n \n \n+def test_signature_enum_default_uses_public_name():\n+    class AliasedState(enum.Enum):\n+        READY = 1\n+        available = 1\n+\n+        @property\n+        def name(self):\n+            return 'available'\n+\n+    def func(state=AliasedState.READY):\n+        pass\n+\n+    sig = inspect.signature(func)\n+    assert stringify_signature(sig) == '(state=AliasedState.available)'\n+\n+\n def test_signature_partial():\n     def fun(a, b, c=1, d=2):\n         pass\n",
+  "test_command": "python -m pytest -q tests/test_util_inspect.py::test_signature_enum_default_uses_public_name"
+}

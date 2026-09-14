@@ -1,0 +1,10 @@
+{
+  "test_name": "test_filter_with_simple_lazy_object",
+  "specification_gap": "A SimpleLazyObject used as an ORM lookup value must behave like its wrapped value, not only be avoided within TemplateView.get().",
+  "input_description": "Create an Article whose headline is 'Article 1', wrap that string in SimpleLazyObject, and pass the wrapper to QuerySet.filter(headline=...).",
+  "expected_output": "Evaluating the QuerySet returns exactly the matching Article without a database parameter-binding error.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "The issue explicitly identifies QuerySet.filter() as exhibiting the same failure. candidate_a makes lazy objects database-adaptable generally, while candidate_b only changes how TemplateView forwards URL kwargs and leaves this public ORM entry point broken.",
+  "test_patch": "diff --git a/tests/lookup/tests.py b/tests/lookup/tests.py\n--- a/tests/lookup/tests.py\n+++ b/tests/lookup/tests.py\n@@ -9,7 +9,8 @@ from django.db.models import Exists, Max, OuterRef\n from django.db.models.functions import Substr\n from django.test import TestCase, skipUnlessDBFeature\n from django.test.utils import isolate_apps\n from django.utils.deprecation import RemovedInDjango40Warning\n+from django.utils.functional import SimpleLazyObject\n \n from .models import (\n     Article, Author, Freebie, Game, IsNullWithNoneAsRHS, Player, Season, Tag,\n@@ -73,6 +74,10 @@ class LookupTests(TestCase):\n         cls.t2.articles.add(cls.a3, cls.a4, cls.a5)\n         cls.t3 = Tag.objects.create(name='Tag 3')\n         cls.t3.articles.add(cls.a5, cls.a6, cls.a7)\n+\n+    def test_filter_with_simple_lazy_object(self):\n+        headline = SimpleLazyObject(lambda: 'Article 1')\n+        self.assertEqual(list(Article.objects.filter(headline=headline)), [self.a1])\n \n     def test_exists(self):\n         # We can use .exists() to check that there are some\n",
+  "test_command": "./tests/runtests.py lookup.tests.LookupTests.test_filter_with_simple_lazy_object"
+}

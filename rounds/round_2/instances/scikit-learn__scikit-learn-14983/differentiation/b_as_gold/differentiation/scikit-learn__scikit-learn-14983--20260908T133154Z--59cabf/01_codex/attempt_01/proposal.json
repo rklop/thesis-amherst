@@ -1,0 +1,10 @@
+{
+  "test_name": "test_repeated_split_repr_preserves_forwarded_cvargs",
+  "specification_gap": "A repeated splitter's repr must preserve every explicit constructor parameter forwarded to its wrapped cross-validator, not only `n_splits`.",
+  "input_description": "A valid `_RepeatedSplits` subclass wraps `ShuffleSplit` through a compatible factory and is constructed with `test_size=0.25`, `n_repeats=3`, and `random_state=7`.",
+  "expected_output": "`repr(splitter)` returns exactly `RepeatedShuffleSplit(n_repeats=3, random_state=7, test_size=0.25)`.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the base class's documented support for arbitrary randomized cross-validators through an alternate repr-visible parameter. candidate_b materializes all forwarded CV arguments, while candidate_a hard-codes only `n_splits`, causing `test_size` to appear as `None`.",
+  "test_patch": "diff --git a/sklearn/model_selection/tests/test_repeated_split_repr.py b/sklearn/model_selection/tests/test_repeated_split_repr.py\nnew file mode 100644\n--- /dev/null\n+++ b/sklearn/model_selection/tests/test_repeated_split_repr.py\n@@ -0,0 +1,18 @@\n+from sklearn.model_selection import ShuffleSplit\n+from sklearn.model_selection._split import _RepeatedSplits\n+\n+\n+def test_repeated_split_repr_preserves_forwarded_cvargs():\n+    def shuffle_split_factory(shuffle, **kwargs):\n+        return ShuffleSplit(**kwargs)\n+\n+    class RepeatedShuffleSplit(_RepeatedSplits):\n+        def __init__(self, test_size=None, n_repeats=10,\n+                     random_state=None):\n+            super().__init__(shuffle_split_factory, n_repeats, random_state,\n+                             test_size=test_size)\n+\n+    splitter = RepeatedShuffleSplit(test_size=0.25, n_repeats=3,\n+                                    random_state=7)\n+    assert repr(splitter) == (\n+        \"RepeatedShuffleSplit(n_repeats=3, random_state=7, test_size=0.25)\")\n",
+  "test_command": "cd /testbed && python -m pytest -q sklearn/model_selection/tests/test_repeated_split_repr.py"
+}

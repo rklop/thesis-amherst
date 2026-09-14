@@ -1,0 +1,41 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -205,6 +205,36 @@ class OptimizerTests(SimpleTestCase):
+             migrations.AlterUniqueTogether("Foo", [["a", "b"]]),
+             migrations.AlterUniqueTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_alter_unique_model_with_str_subclass_option_name(self):
++        class TaggedString(str):
++            def __new__(cls, value, tag):
++                value = str.__new__(cls, value)
++                value.tag = tag
++                return value
++
++            def __eq__(self, other):
++                return str.__eq__(self, other) and (
++                    not isinstance(other, TaggedString) or self.tag == other.tag
++                )
++
++            def __ne__(self, other):
++                return not self == other
++
++            __hash__ = str.__hash__
++
++        class TaggedAlterUniqueTogether(migrations.AlterUniqueTogether):
++            def __init__(self, name, unique_together, tag):
++                super().__init__(name, unique_together)
++                self.option_name = TaggedString(self.option_name, tag)
++
++        operations = [
++            TaggedAlterUniqueTogether("Foo", [["a", "b"]], "first"),
++            TaggedAlterUniqueTogether("Foo", [["a", "c"]], "second"),
++        ]
++        optimized, _ = self.optimize(operations, "migrations")
++
++        self.assertEqual(optimized, [operations[1]])
++
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),

@@ -1,0 +1,45 @@
+diff --git a/sphinx/util/docfields.py b/sphinx/util/docfields.py
+index 3a3367ebe..755e47697 100644
+--- a/sphinx/util/docfields.py
++++ b/sphinx/util/docfields.py
+@@ -35,6 +35,31 @@ def _is_single_paragraph(node: nodes.field_body) -> bool:
+     return False
+ 
+ 
++
++def _split_type_and_name(fieldarg: str) -> Tuple[str, str]:
++    """Split a field argument like "Dict[str, str] name" into type and name.
++    
++    This handles cases where the type contains brackets like dict[str, str]
++    or function(params).
++    """
++    # Find the last whitespace that's not inside brackets
++    bracket_depth = 0
++    last_space = -1
++    
++    for i, char in enumerate(fieldarg):
++        if char in '([':
++            bracket_depth += 1
++        elif char in ')]':
++            bracket_depth -= 1
++        elif char.isspace() and bracket_depth == 0:
++            last_space = i
++    
++    if last_space > 0:
++        return fieldarg[:last_space], fieldarg[last_space + 1:]
++    else:
++        raise ValueError("No space found outside of brackets")
++
++
+ class Field:
+     """A doc field that is never grouped.  It can have an argument or not, the
+     argument can be linked using a specified *rolename*.  Field should be used
+@@ -298,7 +323,7 @@ class DocFieldTransformer:
+             # also support syntax like ``:param type name:``
+             if typedesc.is_typed:
+                 try:
+-                    argtype, argname = fieldarg.split(None, 1)
++                    argtype, argname = _split_type_and_name(fieldarg)
+                 except ValueError:
+                     pass
+                 else:

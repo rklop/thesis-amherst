@@ -1,0 +1,24 @@
+diff --git a/sympy/core/function.py b/sympy/core/function.py
+index 1b8005e1d..5543aa0e6 100644
+--- a/sympy/core/function.py
++++ b/sympy/core/function.py
+@@ -507,7 +507,18 @@ def _eval_evalf(self, prec):
+             func = getattr(mpmath, fname)
+         except (AttributeError, KeyError):
+             try:
+-                return Float(self._imp_(*self.args), prec)
++                # Evaluate the arguments first
++                args = [arg.evalf(prec) for arg in self.args]
++                # If any argument is still symbolic (not numeric), return None
++                # to indicate that evalf couldn't be performed
++                if any(not arg.is_number for arg in args):
++                    return None
++                # Call _imp_ with evaluated arguments
++                result = self._imp_(*args)
++                # If result is a SymPy expression, evaluate it recursively
++                if hasattr(result, 'evalf'):
++                    return result.evalf(prec)
++                return Float(result, prec)
+             except (AttributeError, TypeError, ValueError):
+                 return
+ 

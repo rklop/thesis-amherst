@@ -1,0 +1,63 @@
+diff --git a/sympy/sets/handlers/intersection.py b/sympy/sets/handlers/intersection.py
+index c54dc8f72a..030630ed3e 100644
+--- a/sympy/sets/handlers/intersection.py
++++ b/sympy/sets/handlers/intersection.py
+@@ -223,6 +223,9 @@ def intersection_sets(a, b): # noqa:F811
+ @dispatch(ImageSet, Set)  # type: ignore # noqa:F811
+ def intersection_sets(self, other): # noqa:F811
+     from sympy.solvers.diophantine import diophantine
++    from sympy.sets.conditionset import ConditionSet
++    from sympy.sets.fancysets import ImageSet
++    from sympy.sets.sets import Complement
+ 
+     # Only handle the straight-forward univariate case
+     if (len(self.lamda.variables) > 1
+@@ -306,19 +309,44 @@ def intersection_sets(self, other): # noqa:F811
+             # univarite imaginary part in same variable
+             x, xis = zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols])
+             if x and all(i == n for i in x):
+-                base_set -= FiniteSet(xis)
++                base_set &= FiniteSet(*xis)
+             else:
+-                base_set -= ConditionSet(n, Eq(im, 0), S.Integers)
++                base_set &= ConditionSet(n, Eq(im, 0), S.Integers)
+         # exclude values that make denominators 0
+         for i in denoms(f):
+             if i.has(n):
+-                sol = list(zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols]))
++                sol = list(zip(*[solve_linear(j, 0) for j in Mul.make_args(i) if n in j.free_symbols]))
+                 if sol != []:
+                     x, xis = sol
+                     if x and all(i == n for i in x):
+-                        base_set -= FiniteSet(xis)
++                        base_set -= FiniteSet(*xis)
+                 else:
+                     base_set -= ConditionSet(n, Eq(i, 0), S.Integers)
++        # Try to simplify results where base_set is a Complement containing a ConditionSet
++        if isinstance(base_set, Complement):
++            bs = base_set.args[0]
++            if isinstance(bs, ConditionSet):
++                # Try to evaluate the ConditionSet
++                from sympy.solvers.solveset import solveset
++                try:
++                    sol = solveset(bs.condition, bs.bound_symbols[0], domain=bs.base_set)
++                    if sol.is_FiniteSet:
++                        # Filter out values that give non-finite results (zoo, nan, etc.)
++                        valid_values = []
++                        for expr in sol:
++                            val = lam(expr)
++                            if val.is_finite:
++                                valid_values.append(expr)
++                        if not valid_values:
++                            return S.EmptySet
++                        elif len(valid_values) == len(sol):
++                            # All values are valid, return the evaluated set
++                            return FiniteSet(*[lam(expr) for expr in sol])
++                        else:
++                            # Some values filtered out, recalculate
++                            return imageset(lam, FiniteSet(*valid_values))
++                except:
++                    pass
+         return imageset(lam, base_set)
+ 
+     elif isinstance(other, Interval):

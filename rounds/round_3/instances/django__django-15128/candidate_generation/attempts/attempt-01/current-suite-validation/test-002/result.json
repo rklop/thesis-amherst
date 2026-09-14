@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "0e08adb95c753b9b373ff6adfda468d0ac03e85d5ea748abb4090d7ab2d655e1",
+    "test_sha256": "8a4d22b44c420b66c0d2cf49102958b0b3c6a46faa69b676b0b717a75b510d89",
+    "test": {
+      "test_id": "django__django-15128--8a4d22b44c420b66",
+      "test_name": "test_or_with_custom_query_join_override",
+      "specification_gap": "Alias-collision handling for QuerySet OR combinations must preserve the established Query.join(join, reuse=None) override contract. A custom Query subclass using that signature should still support combinations whose left and right sides create offset, overlapping sequential aliases.",
+      "expected_output": "Evaluating the combined queryset succeeds and returns each of the four classrooms exactly once. candidate_a instead passes a new reuse_with_aliases keyword to the existing join override and raises TypeError during the OR operation.",
+      "test_patch": "diff --git a/tests/queries/tests.py b/tests/queries/tests.py\n--- a/tests/queries/tests.py\n+++ b/tests/queries/tests.py\n@@ -8,7 +8,9 @@ from django.core.exceptions import EmptyResultSet, FieldError\n from django.db import DEFAULT_DB_ALIAS, connection\n from django.db.models import Count, Exists, F, Max, OuterRef, Q\n from django.db.models.expressions import RawSQL\n+from django.db.models.query import QuerySet\n from django.db.models.sql.constants import LOUTER\n+from django.db.models.sql.query import Query\n from django.db.models.sql.where import NothingNode, WhereNode\n from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature\n from django.test.utils import CaptureQueriesContext\n@@ -2097,6 +2099,27 @@ class QuerySetBitwiseOperationTests(TestCase):\n         cls.room_3 = Classroom.objects.create(school=cls.school, has_blackboard=True, name='Room 3')\n         cls.room_4 = Classroom.objects.create(school=cls.school, has_blackboard=False, name='Room 4')\n \n+    def test_or_with_custom_query_join_override(self):\n+        class JoinOverrideQuery(Query):\n+            def join(self, join, reuse=None):\n+                return super().join(join, reuse=reuse)\n+\n+        student = Student.objects.create(school=self.school)\n+        self.room_1.students.add(student)\n+        queryset = QuerySet(\n+            model=Classroom,\n+            query=JoinOverrideQuery(Classroom),\n+        )\n+        lhs = queryset.filter(students=student)\n+        rhs = queryset.filter(\n+            school__classroom__school__classroom__name='Room 2',\n+        )\n+\n+        self.assertCountEqual(\n+            (lhs | rhs).distinct(),\n+            [self.room_1, self.room_2, self.room_3, self.room_4],\n+        )\n+\n     @skipUnlessDBFeature('allow_sliced_subqueries_with_in')\n     def test_or_with_rhs_slice(self):\n         qs1 = Classroom.objects.filter(has_blackboard=True)\n",
+      "test_command": "python tests/runtests.py queries.tests.QuerySetBitwiseOperationTests.test_or_with_custom_query_join_override",
+      "test_patch_sha256": "8a4d22b44c420b66c0d2cf49102958b0b3c6a46faa69b676b0b717a75b510d89",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.694,
+    "log_path": "test-002/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-15128--8a4d22b44c420b66",
+  "polarity": "must_pass"
+}

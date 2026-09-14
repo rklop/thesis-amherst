@@ -1,0 +1,57 @@
+diff --git a/sphinx/util/docfields.py b/sphinx/util/docfields.py
+index 3a3367ebe..214b6e2a7 100644
+--- a/sphinx/util/docfields.py
++++ b/sphinx/util/docfields.py
+@@ -18,6 +18,43 @@ from sphinx import addnodes
+ from sphinx.environment import BuildEnvironment
+ from sphinx.util.typing import TextlikeNode
+ 
++
++
++def _split_type_and_name(fieldarg: str) -> Tuple[str, str]:
++    """Split a field argument like "Dict[str, str] name" into type and name.
++    
++    This handles cases where the type contains brackets or parentheses with
++    spaces inside, like dict(str, str) or List[Tuple[int, str]].
++    Also handles quoted strings like Literal["["].
++    """
++    # Find the last whitespace that is not inside parentheses, brackets, or quotes
++    depth = 0
++    in_string = False
++    string_char = None
++    last_space = -1
++    for i, char in enumerate(fieldarg):
++        # Handle string literals (both single and double quotes)
++        if char in ('"', "'") and not in_string:
++            in_string = True
++            string_char = char
++        elif char == string_char and in_string:
++            in_string = False
++            string_char = None
++        # Handle brackets only when not in a string
++        elif not in_string:
++            if char in '([':
++                depth += 1
++            elif char in ')]':
++                depth -= 1
++            elif char.isspace() and depth == 0:
++                last_space = i
++    
++    if last_space > 0:
++        return fieldarg[:last_space], fieldarg[last_space + 1:].lstrip()
++    else:
++        # No space found, treat the whole thing as the name
++        return '', fieldarg
++
+ if TYPE_CHECKING:
+     from sphinx.directive import ObjectDescription
+ 
+@@ -298,7 +335,7 @@ class DocFieldTransformer:
+             # also support syntax like ``:param type name:``
+             if typedesc.is_typed:
+                 try:
+-                    argtype, argname = fieldarg.split(None, 1)
++                    argtype, argname = _split_type_and_name(fieldarg)
+                 except ValueError:
+                     pass
+                 else:

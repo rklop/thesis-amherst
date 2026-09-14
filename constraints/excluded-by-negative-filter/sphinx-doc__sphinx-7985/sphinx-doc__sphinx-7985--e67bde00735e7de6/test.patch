@@ -1,0 +1,45 @@
+diff --git a/tests/test_build_linkcheck_local.py b/tests/test_build_linkcheck_local.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_build_linkcheck_local.py
+@@ -0,0 +1,40 @@
++"""
++    test_build_linkcheck_local
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++    Test local-link checking.
++"""
++
++import json
++import os
++
++import pytest
++
++from sphinx.builders import linkcheck
++
++
++@pytest.mark.sphinx('linkcheck', testroot='linkcheck', freshenv=True)
++def test_existing_local_link_uses_real_filesystem(app, monkeypatch):
++    target = app.srcdir / 'target.dat'
++    target.write_text('present')
++    (app.srcdir / 'links.txt').write_text(
++        '`local target <target.dat>`_\n'
++    )
++
++    class DelegatingPath:
++        def __getattr__(self, name):
++            return getattr(os.path, name)
++
++        def exists(self, filename):
++            if str(filename) == str(target):
++                return False
++            return os.path.exists(filename)
++
++    monkeypatch.setattr(linkcheck, 'path', DelegatingPath())
++
++    app.builder.build_all()
++    rows = [json.loads(line) for line in
++            (app.outdir / 'output.json').read_text().splitlines()]
++    target_row = next(row for row in rows if row['uri'] == 'target.dat')
++
++    assert (target_row['status'], target_row['info']) == ('working', '')

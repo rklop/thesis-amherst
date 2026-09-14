@@ -1,0 +1,10 @@
+{
+  "test_name": "test_rolling_iter_center_numpy_integer_window",
+  "specification_gap": "Manual centered rolling iteration must accept NumPy integer window sizes just like Python integers, normalizing them before calculating positional slice bounds. Centering must also produce the correct partial windows at both boundaries.",
+  "input_description": "A DataArray containing [1, 2, 3, 4, 5], iterated with rolling window np.uint64(3), center=True, and min_periods=1. The mean of each yielded window is collected.",
+  "expected_output": "The iterator yields centered windows whose means are [1.5, 2.0, 3.0, 4.0, 4.5].",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "NumPy integer scalars are a common integer variant in xarray programs. The supplied gold converts the window to a Python int before offset arithmetic; candidate_a retains unsigned NumPy arithmetic, causing floating positional slice bounds instead of producing centered windows.",
+  "test_patch": "diff --git a/xarray/tests/test_rolling.py b/xarray/tests/test_rolling.py\n--- a/xarray/tests/test_rolling.py\n+++ b/xarray/tests/test_rolling.py\n@@ -47,6 +47,15 @@ class TestDataArrayRolling:\n                 np.allclose(\n                     actual.values[actual.values.nonzero()],\n                     expected.values[expected.values.nonzero()],\n                 )\n \n+    def test_rolling_iter_center_numpy_integer_window(self) -> None:\n+        da = DataArray(np.arange(1, 6), dims=\"x\")\n+        rolling_obj = da.rolling(x=np.uint64(3), center=True, min_periods=1)\n+        actual = [\n+            window.mean().values.item() for _, window in rolling_obj\n+        ]\n+\n+        assert actual == [1.5, 2.0, 3.0, 4.0, 4.5]\n+\n     @pytest.mark.parametrize(\"da\", (1,), indirect=True)\n     def test_rolling_repr(self, da) -> None:\n         rolling_obj = da.rolling(time=7)\n",
+  "test_command": "python -m pytest -q xarray/tests/test_rolling.py::TestDataArrayRolling::test_rolling_iter_center_numpy_integer_window"
+}

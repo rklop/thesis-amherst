@@ -1,0 +1,69 @@
+diff --git a/tests/admin_filters/models.py b/tests/admin_filters/models.py
+--- a/tests/admin_filters/models.py
++++ b/tests/admin_filters/models.py
+@@ -76,4 +76,24 @@ class Bookmark(models.Model):
+     none_or_null = models.CharField(max_length=20, choices=CHOICES, blank=True, null=True)
+ 
+     def __str__(self):
+         return self.url
++
++
++class DescendingNameManager(models.Manager):
++    def get_queryset(self):
++        return super().get_queryset().order_by('-name')
++
++
++class MetaOrderedAuthor(models.Model):
++    name = models.CharField(max_length=20)
++
++    objects = DescendingNameManager()
++
++    class Meta:
++        ordering = ('name',)
++
++    def __str__(self):
++        return self.name
++
++
++class MetaOrderedBook(models.Model):
++    author = models.ForeignKey(MetaOrderedAuthor, models.CASCADE)
+diff --git a/tests/admin_filters/tests.py b/tests/admin_filters/tests.py
+--- a/tests/admin_filters/tests.py
++++ b/tests/admin_filters/tests.py
+@@ -12,7 +12,10 @@ from django.contrib.auth.models import User
+ from django.core.exceptions import ImproperlyConfigured
+ from django.test import RequestFactory, TestCase, override_settings
+ 
+-from .models import Book, Bookmark, Department, Employee, TaggedItem
++from .models import (
++    Book, Bookmark, Department, Employee, MetaOrderedAuthor, MetaOrderedBook,
++    TaggedItem,
++)
+ 
+ 
+ def select_by(dictlist, key, value):
+@@ -590,5 +593,24 @@ class ListFiltersTests(TestCase):
+         filterspec = changelist.get_filters(request)[0][0]
+         expected = [(self.john.pk, 'John Blue'), (self.jack.pk, 'Jack Red')]
+         self.assertEqual(filterspec.lookup_choices, expected)
+ 
++    def test_relatedfieldlistfilter_uses_meta_ordering(self):
++        class BookAdmin(ModelAdmin):
++            list_filter = ('author',)
++
++        first = MetaOrderedAuthor.objects.create(name='A')
++        second = MetaOrderedAuthor.objects.create(name='Z')
++        MetaOrderedBook.objects.create(author=first)
++        MetaOrderedBook.objects.create(author=second)
++        modeladmin = BookAdmin(MetaOrderedBook, site)
++        request = self.request_factory.get('/')
++        request.user = self.alfred
++        changelist = modeladmin.get_changelist_instance(request)
++
++        filterspec = changelist.get_filters(request)[0][0]
++        self.assertEqual(
++            filterspec.lookup_choices,
++            [(first.pk, 'A'), (second.pk, 'Z')],
++        )
++
+     def test_relatedfieldlistfilter_manytomany(self):

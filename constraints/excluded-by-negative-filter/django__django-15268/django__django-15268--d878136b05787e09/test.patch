@@ -1,0 +1,38 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -203,11 +203,34 @@ class OptimizerTests(SimpleTestCase):
+     def test_alter_alter_unique_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterUniqueTogether("Foo", [["a", "b"]]),
+             migrations.AlterUniqueTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_together_subclass_different_option(self):
++        """
++        AlterTogether operations for different options remain independent when
++        one operation's class subclasses the other.
++        """
++        class CustomAlterIndexTogether(migrations.AlterUniqueTogether):
++            option_name = "index_together"
++
++            def __init__(self, name, index_together):
++                super().__init__(name, index_together)
++
++        unique_together = migrations.AlterUniqueTogether("Foo", [["a", "b"]])
++        index_together = CustomAlterIndexTogether("Foo", [["a", "c"]])
++        result, _ = self.optimize(
++            [
++                unique_together,
++                CustomAlterIndexTogether("Foo", set()),
++                index_together,
++            ],
++            "migrations",
++        )
++        self.assertEqual(result, [unique_together, index_together])
++
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),
+             migrations.AlterIndexTogether("Foo", [["a", "c"]]),
+         )

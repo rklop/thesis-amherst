@@ -1,0 +1,26 @@
+diff --git a/tests/queries/tests.py b/tests/queries/tests.py
+--- a/tests/queries/tests.py
++++ b/tests/queries/tests.py
+@@ -413,6 +413,21 @@ class Queries1Tests(TestCase):
+                 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM', 'AN',
+             }
+         )
+ 
++    def test_combine_with_multichar_alias_prefix(self):
++        deepest = Tag.objects.create(name='t6', parent=self.t4)
++
++        def with_multichar_alias_prefix(queryset):
++            nested = Tag.objects.all()
++            for _ in range(5):
++                nested = Tag.objects.filter(pk__in=nested)
++            queryset = queryset.filter(pk__in=nested)
++            queryset.query = queryset.query.resolve_expression(Tag.objects.all().query)
++            return queryset
++
++        lhs = with_multichar_alias_prefix(Tag.objects.filter(parent__name='t4'))
++        rhs = with_multichar_alias_prefix(Tag.objects.filter(parent__parent__parent__name='t1'))
++        self.assertSequenceEqual(lhs | rhs, [deepest])
++
+     def test_heterogeneous_qs_combination(self):
+         # Combining querysets built on different models should behave in a well-defined
+         # fashion. We raise an error.

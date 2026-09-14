@@ -1,0 +1,52 @@
+diff --git a/sympy/sets/handlers/intersection.py b/sympy/sets/handlers/intersection.py
+index c54dc8f72a..f976b1f84f 100644
+--- a/sympy/sets/handlers/intersection.py
++++ b/sympy/sets/handlers/intersection.py
+@@ -304,21 +304,38 @@ def intersection_sets(self, other): # noqa:F811
+             return None
+         else:
+             # univarite imaginary part in same variable
++            from sympy.solvers.solveset import solveset
+             x, xis = zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols])
+             if x and all(i == n for i in x):
+-                base_set -= FiniteSet(xis)
++                # Linear case: use finite set (intersect with solutions)
++                base_set = base_set.intersect(FiniteSet(*xis))
+             else:
+-                base_set -= ConditionSet(n, Eq(im, 0), S.Integers)
+-        # exclude values that make denominators 0
++                # Non-linear case: use solveset to find all solutions
++                sol = solveset(im, n, S.Integers)
++                if sol is S.EmptySet:
++                    return S.EmptySet
++                elif isinstance(sol, FiniteSet):
++                    # All solutions are finite integers - intersect
++                    base_set = base_set.intersect(sol)
++                else:
++                    # Couldn't solve exactly, use condition set (intersect)
++                    base_set = base_set.intersect(ConditionSet(n, Eq(im, 0), S.Integers))
++        # exclude values that make denominators 0 (subtract from valid values)
+         for i in denoms(f):
+             if i.has(n):
+-                sol = list(zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols]))
+-                if sol != []:
+-                    x, xis = sol
+-                    if x and all(i == n for i in x):
+-                        base_set -= FiniteSet(xis)
++                from sympy.solvers.solveset import solveset
++                sol = list(zip(*[solve_linear(j, 0) for j in Mul.make_args(i) if n in j.free_symbols]))
++                if sol != [] and all(j == n for j in sol[0]):
++                    base_set -= FiniteSet(*sol[1])
+                 else:
+-                    base_set -= ConditionSet(n, Eq(i, 0), S.Integers)
++                    # Use solveset to find all solutions
++                    sol_set = solveset(i, n, S.Integers)
++                    if sol_set is S.EmptySet:
++                        pass  # No problematic values to exclude
++                    elif isinstance(sol_set, FiniteSet):
++                        base_set -= sol_set
++                    else:
++                        base_set -= ConditionSet(n, Eq(i, 0), S.Integers)
+         return imageset(lam, base_set)
+ 
+     elif isinstance(other, Interval):

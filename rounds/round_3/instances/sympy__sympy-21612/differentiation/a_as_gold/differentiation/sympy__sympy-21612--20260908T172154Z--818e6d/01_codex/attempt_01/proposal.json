@@ -1,0 +1,10 @@
+{
+  "test_name": "test_nested_reciprocal_accepts_sympy_true_negativity",
+  "specification_gap": "A known-negative exponent may expose its truth value as SymPy's public `S.true`, rather than the identical Python `True` object. Denominator grouping must honor that truth-valued assumption.",
+  "input_description": "Print an unevaluated product containing the reciprocal of `y**(-1/2)`, where `-1/2` is wrapped by an `UnevaluatedExpr` subtype whose public `is_negative` value is `S.true`.",
+  "expected_output": "The expression prints as `x/(1/sqrt(y))`. Flattening it to `x/1/sqrt(y)` changes the association from dividing by the complete reciprocal to successive left-associative divisions.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This is a type variant of the reported nested-fraction bug. It verifies that denominator boundaries are preserved for a public SymPy truth value, rather than only when negativity is represented by the exact built-in `True` singleton.",
+  "test_patch": "diff --git a/sympy/printing/tests/test_str_nested_reciprocal.py b/sympy/printing/tests/test_str_nested_reciprocal.py\nnew file mode 100644\n--- /dev/null\n+++ b/sympy/printing/tests/test_str_nested_reciprocal.py\n@@ -0,0 +1,16 @@\n+from sympy import Mul, Pow, S, UnevaluatedExpr, symbols\n+\n+\n+def test_nested_reciprocal_accepts_sympy_true_negativity():\n+    class NegativeHalf(UnevaluatedExpr):\n+        is_negative = S.true\n+\n+        def __neg__(self):\n+            return -self.args[0]\n+\n+    x, y = symbols('x y')\n+    exponent = NegativeHalf(-S.Half)\n+    inner = Pow(y, exponent, evaluate=False)\n+    expression = Mul(x, Pow(inner, -1, evaluate=False), evaluate=False)\n+\n+    assert str(expression) == 'x/(1/sqrt(y))'\n",
+  "test_command": "python -m pytest -q sympy/printing/tests/test_str_nested_reciprocal.py"
+}

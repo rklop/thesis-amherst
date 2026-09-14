@@ -1,0 +1,10 @@
+{
+  "test_name": "test_catalog_deduplicates_locations_without_reordering",
+  "specification_gap": "Deduplicating Message.locations must preserve the order in which each unique location was first encountered; it must not sort the locations.",
+  "input_description": "Add one message at ('z-first.rst', 42), then ('a-second.rst', 7), then repeat ('z-first.rst', 42).",
+  "expected_output": "Catalog iteration produces one Message with locations exactly [('z-first.rst', 42), ('a-second.rst', 7)]: the duplicate is removed without reordering the two unique locations.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "The issue requires duplicate location references to disappear. This boundary case clarifies that deduplication is stable, exposing candidate_b's externally observable sorting while avoiding POT-format details. The patch was validated with git apply --check.",
+  "test_patch": "diff --git a/tests/test_build_gettext_locations.py b/tests/test_build_gettext_locations.py\nnew file mode 100644\n--- /dev/null\n+++ b/tests/test_build_gettext_locations.py\n@@ -0,0 +1,17 @@\n+\"\"\"Tests for gettext catalog location handling.\"\"\"\n+\n+from sphinx.builders.gettext import Catalog, MsgOrigin\n+\n+\n+def test_catalog_deduplicates_locations_without_reordering():\n+    catalog = Catalog()\n+    catalog.add('Repeated message', MsgOrigin('z-first.rst', 42))\n+    catalog.add('Repeated message', MsgOrigin('a-second.rst', 7))\n+    catalog.add('Repeated message', MsgOrigin('z-first.rst', 42))\n+\n+    message, = catalog\n+\n+    assert message.locations == [\n+        ('z-first.rst', 42),\n+        ('a-second.rst', 7),\n+    ]\n",
+  "test_command": "python -m pytest -q tests/test_build_gettext_locations.py"
+}

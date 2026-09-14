@@ -1,0 +1,92 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..e5bef5bef 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -852,6 +852,7 @@ class PyProperty(PyObject):
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
+         'abstractmethod': directives.flag,
++        'classmethod': directives.flag,
+         'type': directives.unchanged,
+     })
+ 
+@@ -866,6 +867,8 @@ class PyProperty(PyObject):
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+         prefix = ['property']
++        if 'classmethod' in self.options:
++            prefix.insert(0, 'class')
+         if 'abstractmethod' in self.options:
+             prefix.insert(0, 'abstract')
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..8eac4f80d 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -2676,6 +2676,17 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+         if inspect.isabstractmethod(self.object):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
++        # Check if the property is wrapped by a classmethod
++        if isinstance(self.parent, type):
++            for cls in self.parent.__mro__:
++                # Use the last element of objpath as the member name
++                name = self.objpath[-1]
++                if name in cls.__dict__:
++                    obj = cls.__dict__[name]
++                    if isinstance(obj, classmethod):
++                        self.add_line('   :classmethod:', sourcename)
++                    break
++
+         if safe_getattr(self.object, 'fget', None) and self.config.autodoc_typehints != 'none':
+             try:
+                 signature = inspect.signature(self.object.fget,
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..169a2d559 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -29,6 +29,13 @@ if False:
+ logger = logging.getLogger(__name__)
+ 
+ 
++def is_classmethod_property(obj: Any) -> bool:
++    """Check if the object is a classmethod wrapping a property."""
++    if isinstance(obj, classmethod):
++        return isinstance(obj.__func__, property)
++    return False
++
++
+ def mangle(subject: Any, name: str) -> str:
+     """mangle the given name."""
+     try:
+@@ -107,7 +114,18 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
+             parent = obj
+             logger.debug('[autodoc] getattr(_, %r)', attrname)
+             mangled_name = mangle(obj, attrname)
+-            obj = attrgetter(obj, mangled_name)
++            
++            # Check if this is a class with a classmethod-wrapped-property
++            # In that case, we need to get the property descriptor from __dict__
++            # instead of using getattr which evaluates the property
++            if hasattr(obj, '__dict__') and mangled_name in obj.__dict__:
++                dict_obj = obj.__dict__[mangled_name]
++                if is_classmethod_property(dict_obj):
++                    obj = dict_obj.__func__
++                else:
++                    obj = attrgetter(obj, mangled_name)
++            else:
++                obj = attrgetter(obj, mangled_name)
+ 
+             try:
+                 logger.debug('[autodoc] => %r', obj)
+@@ -281,6 +299,10 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable
+             unmangled = unmangle(subject, name)
+             if unmangled and unmangled not in members:
+                 if name in obj_dict:
++                    # Check if this is a classmethod wrapping a property
++                    # In that case, we need to use the property descriptor, not the evaluated value
++                    if is_classmethod_property(obj_dict[name]):
++                        value = obj_dict[name].__func__
+                     members[unmangled] = ObjectMember(unmangled, value, class_=subject)
+                 else:
+                     members[unmangled] = ObjectMember(unmangled, value)

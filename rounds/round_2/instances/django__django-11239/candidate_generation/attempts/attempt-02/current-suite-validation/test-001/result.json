@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "9e46c1b352a7e006b478d1cdadefd88f6d32d1e6a8fbe2a3d8343e1e54693536",
+    "test_sha256": "d9ac6136171b16118ff9a437fc4168497db136e8f150ddf8671d283b2b294b21",
+    "test": {
+      "test_id": "django__django-11239--d9ac6136171b1611",
+      "test_name": "test_ssl_options_accept_mapping_get_requiring_default",
+      "specification_gap": "PostgreSQL runshell_db() should preserve its existing connection-parameter mapping contract when adding TLS options: each parameter is retrieved with an explicit empty fallback, allowing mapping implementations whose get() requires a default argument.",
+      "expected_output": "The psql subprocess environment contains PGSSLMODE=verify-ca, PGSSLROOTCERT=ca.crt, PGSSLCERT=client.crt, and PGSSLKEY=client.key. candidate_b instead calls get() with one argument for the TLS keys and raises TypeError before launching psql.",
+      "test_patch": "diff --git a/tests/dbshell/test_postgresql.py b/tests/dbshell/test_postgresql.py\n--- a/tests/dbshell/test_postgresql.py\n+++ b/tests/dbshell/test_postgresql.py\n@@ -50,6 +50,26 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):\n                 None,\n             )\n         )\n \n+    def test_ssl_options_accept_mapping_get_requiring_default(self):\n+        class ExplicitDefaultDict(dict):\n+            def get(self, key, default):\n+                return super().get(key, default)\n+\n+        dbinfo = ExplicitDefaultDict({\n+            'database': 'dbname',\n+            'sslmode': 'verify-ca',\n+            'sslrootcert': 'ca.crt',\n+            'sslcert': 'client.crt',\n+            'sslkey': 'client.key',\n+        })\n+        with mock.patch('subprocess.run') as subprocess_run:\n+            DatabaseClient.runshell_db(dbinfo)\n+        env = subprocess_run.call_args[1]['env']\n+        self.assertEqual(env['PGSSLMODE'], 'verify-ca')\n+        self.assertEqual(env['PGSSLROOTCERT'], 'ca.crt')\n+        self.assertEqual(env['PGSSLCERT'], 'client.crt')\n+        self.assertEqual(env['PGSSLKEY'], 'client.key')\n+\n     def test_column(self):\n         self.assertEqual(\n             self._run_it({\n",
+      "test_command": "cd /testbed && ./tests/runtests.py dbshell.test_postgresql.PostgreSqlDbshellCommandTestCase.test_ssl_options_accept_mapping_get_requiring_default",
+      "test_patch_sha256": "d9ac6136171b16118ff9a437fc4168497db136e8f150ddf8671d283b2b294b21",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.365,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-11239--d9ac6136171b1611",
+  "polarity": "must_pass"
+}

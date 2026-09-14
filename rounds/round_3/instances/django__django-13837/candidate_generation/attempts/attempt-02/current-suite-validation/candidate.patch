@@ -1,0 +1,23 @@
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index b8efb9f881..01e10e8df6 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -221,7 +221,17 @@ def get_child_arguments():
+     py_script = Path(sys.argv[0])
+ 
+     args = [sys.executable] + ['-W%s' % o for o in sys.warnoptions]
+-    if py_script == django_main_path:
++    # Check if Python was started with -m option
++    # __main__.__spec__ is set when Python is launched with -m
++    # __spec__.parent is the package name (e.g., 'django' for 'python -m django')
++    # It is non-None and non-empty only when -m is used with a package
++    # Use sys.modules to access __main__ at runtime to handle mocking in tests
++    main_module = sys.modules['__main__']
++    if getattr(main_module.__spec__, 'parent', None):
++        # The server was started with `python -m package runserver`.
++        args += ['-m', main_module.__spec__.parent]
++        args += sys.argv[1:]
++    elif py_script == django_main_path:
+         # The server was started with `python -m django runserver`.
+         args += ['-m', 'django']
+         args += sys.argv[1:]

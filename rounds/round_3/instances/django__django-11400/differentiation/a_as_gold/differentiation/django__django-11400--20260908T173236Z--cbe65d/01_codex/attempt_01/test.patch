@@ -1,0 +1,31 @@
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -229,6 +229,25 @@ class GetChoicesOrderingTests(TestCase):
+         cls.field = Bar._meta.get_field('a')
+ 
+     def assertChoicesEqual(self, choices, objs):
+         self.assertEqual(choices, [(obj.pk, str(obj)) for obj in objs])
+ 
++    def test_get_choices_uses_snapshot_of_default_ordering(self):
++        original_ordering = Foo._meta.ordering
++        ordering = ['a']
++        Foo._meta.ordering = ordering
++
++        class LimitChoicesTo(dict):
++            def keys(self):
++                ordering[:] = ['-a']
++                return super().keys()
++
++        try:
++            choices = self.field.get_choices(
++                include_blank=False,
++                limit_choices_to=LimitChoicesTo(),
++            )
++        finally:
++            Foo._meta.ordering = original_ordering
++        self.assertChoicesEqual(choices, [self.foo1, self.foo2])
++
+     def test_get_choices(self):
+         self.assertChoicesEqual(
+             self.field.get_choices(include_blank=False, ordering=('a',)),

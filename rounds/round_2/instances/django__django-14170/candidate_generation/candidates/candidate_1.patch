@@ -1,0 +1,122 @@
+diff --git a/django/db/backends/base/operations.py b/django/db/backends/base/operations.py
+index 0fcc607bcf..7e1622c072 100644
+--- a/django/db/backends/base/operations.py
++++ b/django/db/backends/base/operations.py
+@@ -558,6 +558,39 @@ class BaseDatabaseOperations:
+         second = self.adapt_datetimefield_value(second)
+         return [first, second]
+ 
++
++    def iso_year_lookup_bounds_for_date_field(self, value):
++        """
++        Return a two-elements list with the lower and upper bound to be used
++        with a BETWEEN operator to query a DateField value using an iso_year
++        lookup.
++
++        `value` is an int, containing the looked-up iso_year.
++        """
++        first = datetime.date(value, 1, 4)
++        first = first - datetime.timedelta(days=first.weekday())
++        second = datetime.date(value, 12, 28)
++        second = second + datetime.timedelta(days=6 - second.weekday())
++        return [first, second]
++
++    def iso_year_lookup_bounds_for_datetime_field(self, value):
++        """
++        Return a two-elements list with the lower and upper bound to be used
++        with a BETWEEN operator to query a DateTimeField value using an
++        iso_year lookup.
++
++        `value` is an int, containing the looked-up iso_year.
++        """
++        first = datetime.datetime(value, 1, 4)
++        first = first - datetime.timedelta(days=first.weekday())
++        second = datetime.datetime(value, 12, 28, 23, 59, 59, 999999)
++        second = second + datetime.timedelta(days=6 - second.weekday())
++        if settings.USE_TZ:
++            tz = timezone.get_current_timezone()
++            first = timezone.make_aware(first, tz)
++            second = timezone.make_aware(second, tz)
++        return [first, second]
++
+     def get_db_converters(self, expression):
+         """
+         Return a list of functions needed to convert field data.
+diff --git a/django/db/models/functions/datetime.py b/django/db/models/functions/datetime.py
+index 90e6f41be0..92e688696c 100644
+--- a/django/db/models/functions/datetime.py
++++ b/django/db/models/functions/datetime.py
+@@ -6,6 +6,7 @@ from django.db.models.fields import (
+     DateField, DateTimeField, DurationField, Field, IntegerField, TimeField,
+ )
+ from django.db.models.lookups import (
++    IsoYearExact, IsoYearGt, IsoYearGte, IsoYearLt, IsoYearLte,
+     Transform, YearExact, YearGt, YearGte, YearLt, YearLte,
+ )
+ from django.utils import timezone
+@@ -164,11 +165,11 @@ ExtractYear.register_lookup(YearGte)
+ ExtractYear.register_lookup(YearLt)
+ ExtractYear.register_lookup(YearLte)
+ 
+-ExtractIsoYear.register_lookup(YearExact)
+-ExtractIsoYear.register_lookup(YearGt)
+-ExtractIsoYear.register_lookup(YearGte)
+-ExtractIsoYear.register_lookup(YearLt)
+-ExtractIsoYear.register_lookup(YearLte)
++ExtractIsoYear.register_lookup(IsoYearExact)
++ExtractIsoYear.register_lookup(IsoYearGt)
++ExtractIsoYear.register_lookup(IsoYearGte)
++ExtractIsoYear.register_lookup(IsoYearLt)
++ExtractIsoYear.register_lookup(IsoYearLte)
+ 
+ 
+ class Now(Func):
+diff --git a/django/db/models/lookups.py b/django/db/models/lookups.py
+index 916478d075..d053c74724 100644
+--- a/django/db/models/lookups.py
++++ b/django/db/models/lookups.py
+@@ -597,6 +597,44 @@ class YearLte(YearLookup, LessThanOrEqual):
+         return (finish,)
+ 
+ 
++class IsoYearLookup(YearLookup):
++    def year_lookup_bounds(self, connection, year):
++        output_field = self.lhs.lhs.output_field
++        if isinstance(output_field, DateTimeField):
++            bounds = connection.ops.iso_year_lookup_bounds_for_datetime_field(year)
++        else:
++            bounds = connection.ops.iso_year_lookup_bounds_for_date_field(year)
++        return bounds
++
++
++class IsoYearExact(IsoYearLookup, Exact):
++    def get_direct_rhs_sql(self, connection, rhs):
++        return 'BETWEEN %s AND %s'
++
++    def get_bound_params(self, start, finish):
++        return (start, finish)
++
++
++class IsoYearGt(IsoYearLookup, GreaterThan):
++    def get_bound_params(self, start, finish):
++        return (finish,)
++
++
++class IsoYearGte(IsoYearLookup, GreaterThanOrEqual):
++    def get_bound_params(self, start, finish):
++        return (start,)
++
++
++class IsoYearLt(IsoYearLookup, LessThan):
++    def get_bound_params(self, start, finish):
++        return (start,)
++
++
++class IsoYearLte(IsoYearLookup, LessThanOrEqual):
++    def get_bound_params(self, start, finish):
++        return (finish,)
++
++
+ class UUIDTextMixin:
+     """
+     Strip hyphens from a value when filtering a UUIDField on backends without

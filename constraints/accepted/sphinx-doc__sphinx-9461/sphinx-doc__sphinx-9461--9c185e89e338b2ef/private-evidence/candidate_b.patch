@@ -1,0 +1,204 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..e06ce2d51 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -653,6 +653,7 @@ class PyVariable(PyObject):
+     option_spec: OptionSpec = PyObject.option_spec.copy()
+     option_spec.update({
+         'type': directives.unchanged,
++        'classmethod': directives.flag,
+         'value': directives.unchanged,
+     })
+ 
+@@ -814,6 +815,7 @@ class PyAttribute(PyObject):
+     option_spec: OptionSpec = PyObject.option_spec.copy()
+     option_spec.update({
+         'type': directives.unchanged,
++        'classmethod': directives.flag,
+         'value': directives.unchanged,
+     })
+ 
+@@ -853,6 +855,7 @@ class PyProperty(PyObject):
+     option_spec.update({
+         'abstractmethod': directives.flag,
+         'type': directives.unchanged,
++        'classmethod': directives.flag,
+     })
+ 
+     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:
+@@ -868,6 +871,8 @@ class PyProperty(PyObject):
+         prefix = ['property']
+         if 'abstractmethod' in self.options:
+             prefix.insert(0, 'abstract')
++        if 'classmethod' in self.options:
++            prefix.insert(0, 'class')
+ 
+         return ' '.join(prefix) + ' '
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..57d542611 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -2002,6 +2002,32 @@ class DataDocumenter(GenericAliasMixin, NewTypeMixin, TypeVarMixin,
+     def document_members(self, all_members: bool = False) -> None:
+         pass
+ 
++    def get_doc(self, ignore: int = None) -> Optional[List[List[str]]]:
++        """Decode and return lines of the docstring(s) for the object."""
++        if ignore is not None:
++            warnings.warn("The 'ignore' argument to autodoc.%s.get_doc() is deprecated."
++                          % self.__class__.__name__,
++                          RemovedInSphinx50Warning, stacklevel=2)
++        
++        # For classmethod-wrapped property, get docstring from the property's fget
++        if isinstance(self.object, classmethod):
++            fget = safe_getattr(self.object.__func__, 'fget', None)
++            if fget:
++                docstring = getdoc(fget, self.get_attr,
++                                   self.config.autodoc_inherit_docstrings,
++                                   self.parent, self.object_name)
++            else:
++                docstring = None
++        else:
++            docstring = getdoc(self.object, self.get_attr,
++                               self.config.autodoc_inherit_docstrings,
++                               self.parent, self.object_name)
++        
++        if docstring:
++            tab_width = self.directive.state.document.settings.tab_width
++            return [prepare_docstring(docstring, ignore, tab_width)]
++        return []
++
+     def get_real_modname(self) -> str:
+         real_modname = self.get_attr(self.parent or self.object, '__module__', None)
+         return real_modname or self.modname
+@@ -2666,6 +2692,32 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+     def document_members(self, all_members: bool = False) -> None:
+         pass
+ 
++    def get_doc(self, ignore: int = None) -> Optional[List[List[str]]]:
++        """Decode and return lines of the docstring(s) for the object."""
++        if ignore is not None:
++            warnings.warn("The 'ignore' argument to autodoc.%s.get_doc() is deprecated."
++                          % self.__class__.__name__,
++                          RemovedInSphinx50Warning, stacklevel=2)
++        
++        # For classmethod-wrapped property, get docstring from the property's fget
++        if isinstance(self.object, classmethod):
++            fget = safe_getattr(self.object.__func__, 'fget', None)
++            if fget:
++                docstring = getdoc(fget, self.get_attr,
++                                   self.config.autodoc_inherit_docstrings,
++                                   self.parent, self.object_name)
++            else:
++                docstring = None
++        else:
++            docstring = getdoc(self.object, self.get_attr,
++                               self.config.autodoc_inherit_docstrings,
++                               self.parent, self.object_name)
++        
++        if docstring:
++            tab_width = self.directive.state.document.settings.tab_width
++            return [prepare_docstring(docstring, ignore, tab_width)]
++        return []
++
+     def get_real_modname(self) -> str:
+         real_modname = self.get_attr(self.parent or self.object, '__module__', None)
+         return real_modname or self.modname
+@@ -2673,12 +2725,22 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+     def add_directive_header(self, sig: str) -> None:
+         super().add_directive_header(sig)
+         sourcename = self.get_sourcename()
++        if isinstance(self.object, classmethod):
++            self.add_line('   :classmethod:', sourcename)
++
+         if inspect.isabstractmethod(self.object):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
+-        if safe_getattr(self.object, 'fget', None) and self.config.autodoc_typehints != 'none':
++        # For classmethod-wrapped property, we need to get the property from __func__
++        fget = None
++        if isinstance(self.object, classmethod):
++            fget = safe_getattr(self.object.__func__, 'fget', None)
++        else:
++            fget = safe_getattr(self.object, 'fget', None)
++
++        if fget and self.config.autodoc_typehints != 'none':
+             try:
+-                signature = inspect.signature(self.object.fget,
++                signature = inspect.signature(fget,
+                                               type_aliases=self.config.autodoc_type_aliases)
+                 if signature.return_annotation is not Parameter.empty:
+                     objrepr = stringify_typehint(signature.return_annotation)
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..8914b1df9 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -17,7 +17,7 @@ from sphinx.deprecation import RemovedInSphinx50Warning
+ from sphinx.ext.autodoc.mock import ismock, undecorate
+ from sphinx.pycode import ModuleAnalyzer, PycodeError
+ from sphinx.util import logging
+-from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass,
++from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass, isproperty,
+                                  safe_getattr)
+ 
+ if False:
+@@ -109,6 +109,13 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
+             mangled_name = mangle(obj, attrname)
+             obj = attrgetter(obj, mangled_name)
+ 
++            # Check if obj is a class and the attribute is a classmethod-wrapped property
++            # In that case, getattr returns the value, not the property object
++            if hasattr(parent, '__dict__') and attrname in parent.__dict__:
++                dict_obj = parent.__dict__[attrname]
++                if isproperty(dict_obj):
++                    obj = dict_obj
++
+             try:
+                 logger.debug('[autodoc] => %r', obj)
+             except TypeError:
+@@ -281,6 +288,11 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable
+             unmangled = unmangle(subject, name)
+             if unmangled and unmangled not in members:
+                 if name in obj_dict:
++                    # Check if this is a classmethod that wraps a property
++                    # In that case, getattr returns the value, not the property object
++                    obj = obj_dict[name]
++                    if isproperty(obj):
++                        value = obj
+                     members[unmangled] = ObjectMember(unmangled, value, class_=subject)
+                 else:
+                     members[unmangled] = ObjectMember(unmangled, value)
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 23dd9e930..c2181d192 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -390,6 +390,9 @@ def isproperty(obj: Any) -> bool:
+         if isinstance(obj, cached_property):
+             return True
+ 
++    if isinstance(obj, classmethod) and hasattr(obj, "__func__"):
++        return isinstance(obj.__func__, property)
++
+     return isinstance(obj, property)
+ 
+ 
+@@ -834,12 +837,18 @@ def getdoc(obj: Any, attrgetter: Callable = safe_getattr,
+     This tries to obtain the docstring for some kind of objects additionally:
+ 
+     * partial functions
++    * classmethod-wrapped properties
+     * inherited docstring
+     * inherited decorated methods
+     """
+     doc = attrgetter(obj, '__doc__', None)
+     if ispartial(obj) and doc == obj.__class__.__doc__:
+         return getdoc(obj.func)
++    elif isproperty(obj) and isinstance(obj, classmethod):
++        # For classmethod-wrapped properties, get docstring from the property's fget
++        fget = safe_getattr(obj.__func__, 'fget', None)
++        if fget:
++            return getdoc(fget, attrgetter, allow_inherited, cls, name)
+     elif doc is None and allow_inherited:
+         if cls and name:
+             # Check a docstring of the attribute or method from super classes.

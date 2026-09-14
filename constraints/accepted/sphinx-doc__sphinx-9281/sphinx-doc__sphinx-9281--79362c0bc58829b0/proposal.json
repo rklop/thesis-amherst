@@ -1,0 +1,10 @@
+{
+  "test_name": "test_stringify_signature_enum_uses_custom_str",
+  "specification_gap": "Enum defaults should preserve the member's public str() representation, including a custom __str__ override, rather than always reconstructing ClassName.member.",
+  "input_description": "A CustomEnum member named raw_value overrides __str__ to return CustomEnum.display_value and is used as a function's default argument.",
+  "expected_output": "stringify_signature returns exactly (value=CustomEnum.display_value).",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "Both patches fix ordinary Enum defaults, but only candidate_b preserves an Enum's customized public string representation. The assertion observes the rendered signature behavior described by the issue rather than implementation details.",
+  "test_patch": "diff --git a/tests/test_util_inspect.py b/tests/test_util_inspect.py\n--- a/tests/test_util_inspect.py\n+++ b/tests/test_util_inspect.py\n@@ -10,6 +10,7 @@\n \n import ast\n import datetime\n+import enum\n import functools\n import sys\n import types\n@@ -499,7 +500,21 @@ def test_frozenset_sorting_fallback():\n     frozenset_ = frozenset((None, 1))\n     description = inspect.object_description(frozenset_)\n     assert description in (\"frozenset({1, None})\", \"frozenset({None, 1})\")\n \n \n+def test_stringify_signature_enum_uses_custom_str():\n+    class CustomEnum(enum.Enum):\n+        raw_value = 1\n+\n+        def __str__(self):\n+            return 'CustomEnum.display_value'\n+\n+    def func(value=CustomEnum.raw_value):\n+        pass\n+\n+    sig = inspect.signature(func)\n+    assert stringify_signature(sig) == '(value=CustomEnum.display_value)'\n+\n+\n def test_dict_customtype():\n     class CustomType:\n         def __init__(self, value):\n",
+  "test_command": "python -m pytest -q tests/test_util_inspect.py::test_stringify_signature_enum_uses_custom_str"
+}

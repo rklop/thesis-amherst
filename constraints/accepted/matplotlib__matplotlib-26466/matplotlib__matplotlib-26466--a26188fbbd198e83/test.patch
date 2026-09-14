@@ -1,0 +1,48 @@
+diff --git a/lib/matplotlib/tests/test_text.py b/lib/matplotlib/tests/test_text.py
+--- a/lib/matplotlib/tests/test_text.py
++++ b/lib/matplotlib/tests/test_text.py
+@@ -663,6 +663,43 @@ def test_annotation_update():
+     assert not np.allclose(extent1.get_points(), extent2.get_points(),
+                            rtol=1e-6)
+ 
+ 
++def test_annotation_xy_duck_array_preserves_units():
++    import matplotlib.testing.jpl_units as units
++
++    class UnitPoint:
++        def __init__(self, values):
++            self.values = list(values)
++
++        def __iter__(self):
++            return iter(self.values)
++
++        def __array__(self, dtype=None):
++            return np.asarray(
++                [value.convert("m") for value in self.values], dtype=dtype)
++
++        def __array_function__(self, func, types, args, kwargs):
++            if func is np.copy:
++                return type(self)(self.values)
++            return NotImplemented
++
++    units.register()
++    fig, ax = plt.subplots()
++    ax.xaxis.update_units(units.km)
++    ax.yaxis.update_units(units.km)
++    ax.set(xlim=(0, 1), ylim=(0, 1))
++
++    point = UnitPoint([250 * units.m, 250 * units.m])
++    annotation = ax.annotate(
++        "", point, xytext=(.75, .75), annotation_clip=False,
++        arrowprops={"arrowstyle": "-", "shrinkA": 0, "shrinkB": 0})
++    point.values[:] = [900 * units.m, 900 * units.m]
++    fig.canvas.draw()
++
++    np.testing.assert_allclose(
++        annotation.arrow_patch.get_path().vertices[-1],
++        ax.transData.transform((.25, .25)))
++
++
+ @check_figures_equal(extensions=["png"])
+ def test_annotation_units(fig_test, fig_ref):
+     ax = fig_test.add_subplot()

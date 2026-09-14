@@ -1,0 +1,10 @@
+{
+  "test_name": "test_set_cmap_prefers_colormap_for_dual_type",
+  "specification_gap": "When an input satisfies both documented accepted types, str and Colormap, set_cmap must follow colormap-resolution precedence and use the Colormap.name as the default, not the object's unrelated string value.",
+  "input_description": "A ListedColormap subclass that is also a str. Its string value is the unregistered name \"not-a-registered-cmap\", while its Colormap.name is the registered name \"viridis\".",
+  "expected_output": "plt.set_cmap succeeds, and the alternate public entry point mpl.colormaps.get_cmap(None) returns a colormap named \"viridis\" without raising an exception.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "candidate_b pre-classifies the dual-type object as a string before get_cmap resolves it as a Colormap, leaving the unregistered string payload in image.cmap. The subsequent public default lookup should therefore fail for candidate_b, whereas candidate_a consistently uses the resolved Colormap.name.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_cmap_alias.py b/lib/matplotlib/tests/test_cmap_alias.py\nnew file mode 100644\n--- /dev/null\n+++ b/lib/matplotlib/tests/test_cmap_alias.py\n@@ -0,0 +1,22 @@\n+import matplotlib as mpl\n+from matplotlib import pyplot as plt\n+\n+\n+def test_set_cmap_prefers_colormap_for_dual_type():\n+    class StrColormap(str, mpl.colors.ListedColormap):\n+        def __new__(cls, value, colors, name):\n+            return str.__new__(cls, value)\n+\n+        def __init__(self, value, colors, name):\n+            mpl.colors.ListedColormap.__init__(self, colors, name=name)\n+\n+    cmap = StrColormap(\n+        \"not-a-registered-cmap\", [\"black\", \"white\"], \"viridis\")\n+    assert isinstance(cmap, str)\n+    assert isinstance(cmap, mpl.colors.Colormap)\n+\n+    with mpl.rc_context():\n+        plt.set_cmap(cmap)\n+        default = mpl.colormaps.get_cmap(None)\n+\n+    assert default.name == cmap.name\n",
+  "test_command": "cd /testbed && python -m pytest -q lib/matplotlib/tests/test_cmap_alias.py"
+}

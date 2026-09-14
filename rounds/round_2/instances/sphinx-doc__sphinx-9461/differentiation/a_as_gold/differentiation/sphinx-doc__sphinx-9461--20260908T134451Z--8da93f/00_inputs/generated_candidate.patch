@@ -1,0 +1,80 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..e5bef5bef 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -852,6 +852,7 @@ class PyProperty(PyObject):
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
+         'abstractmethod': directives.flag,
++        'classmethod': directives.flag,
+         'type': directives.unchanged,
+     })
+ 
+@@ -866,6 +867,8 @@ class PyProperty(PyObject):
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+         prefix = ['property']
++        if 'classmethod' in self.options:
++            prefix.insert(0, 'class')
+         if 'abstractmethod' in self.options:
+             prefix.insert(0, 'abstract')
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..2639a3dcc 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -2676,6 +2676,16 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+         if inspect.isabstractmethod(self.object):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
++        # Check if this property is wrapped by a classmethod
++        # In Python 3.9+, @classmethod @property results in a classmethod
++        # whose __func__ is the property descriptor
++        if self.parent and self.object_name:
++            parent_dict = safe_getattr(self.parent, '__dict__', {})
++            if self.object_name in parent_dict:
++                descriptor = parent_dict[self.object_name]
++                if isinstance(descriptor, classmethod):
++                    self.add_line('   :classmethod:', sourcename)
++
+         if safe_getattr(self.object, 'fget', None) and self.config.autodoc_typehints != 'none':
+             try:
+                 signature = inspect.signature(self.object.fget,
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..47b7ccbbc 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -109,6 +109,18 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
+             mangled_name = mangle(obj, attrname)
+             obj = attrgetter(obj, mangled_name)
+ 
++            # Check if this is a classmethod that wraps a property
++            # In Python 3.9+, @classmethod @property results in a classmethod
++            # whose __func__ is the property descriptor
++            if parent is not None and hasattr(parent, '__dict__'):
++                if mangled_name in parent.__dict__:
++                    descriptor = parent.__dict__[mangled_name]
++                    if isinstance(descriptor, classmethod):
++                        func = descriptor.__func__
++                        if isinstance(func, property):
++                            # Use the property descriptor instead of the evaluated value
++                            obj = func
++
+             try:
+                 logger.debug('[autodoc] => %r', obj)
+             except TypeError:
+@@ -281,6 +293,14 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable
+             unmangled = unmangle(subject, name)
+             if unmangled and unmangled not in members:
+                 if name in obj_dict:
++                    # Check if this is a classmethod that wraps a property
++                    # In Python 3.9+, @classmethod @property results in a classmethod
++                    # whose __func__ is the property descriptor
++                    if isinstance(obj_dict[name], classmethod):
++                        func = obj_dict[name].__func__
++                        if isinstance(func, property):
++                            # Use the property descriptor instead of the evaluated value
++                            value = func
+                     members[unmangled] = ObjectMember(unmangled, value, class_=subject)
+                 else:
+                     members[unmangled] = ObjectMember(unmangled, value)

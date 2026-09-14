@@ -1,0 +1,33 @@
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 3f7e8f74..85af7f89 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -1860,7 +1860,27 @@ def where(cond, x, y, keep_attrs=None):
+     if keep_attrs is True:
+         # keep the attributes of x, the second parameter, by default to
+         # be consistent with the `where` method of `DataArray` and `Dataset`
+-        keep_attrs = lambda attrs, context: getattr(x, "attrs", {})
++        # For xr.where(cond, x, y), we want:
++        # - Variable attrs: from x (second parameter)
++        # - Coordinate attrs: first non-empty attrs (coordinate attributes should be preserved)
++        # The lambda is called for both variable and coordinate merging.
++        # We detect which case by checking if x.attrs (non-empty) is in the attrs list:
++        # - If x has non-empty attrs and they're in attrs: variable merging -> use x.attrs
++        # - Otherwise: coordinate merging -> use first non-empty attrs
++        from .dataarray import DataArray
++
++        def _keep_attrs_where(attrs, context):
++            # If x is not a DataArray (scalar), return empty attrs
++            if not isinstance(x, DataArray):
++                return {}
++            # If x has non-empty attrs and they're in the attrs list, this is variable merging
++            x_attrs = x.attrs
++            if x_attrs and x_attrs in attrs:
++                return x_attrs
++            # Otherwise (x has no attrs or this is coordinate case), use first non-empty attrs
++            return dict(next((attr for attr in attrs if attr), {}))
++
++        keep_attrs = _keep_attrs_where
+ 
+     # alignment for three arguments is complicated, so don't support it yet
+     return apply_ufunc(

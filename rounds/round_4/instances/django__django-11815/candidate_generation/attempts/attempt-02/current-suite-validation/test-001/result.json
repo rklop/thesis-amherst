@@ -1,0 +1,50 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "96fe80211676f7ac9b6688f2d26c97e31f1c00a5fedbdaec6228cbbe5ae0df2d",
+    "test_sha256": "1545eba16026ec79bb72ff781d44b9ca7796577f087e3057101df443542dbd1e",
+    "test": {
+      "test_id": "django__django-11815--1545eba16026ec79",
+      "test_name": "test_named_integer_regex_flag",
+      "specification_gap": "Compiled-regex serialization should preserve the symbolic name of an int-compatible regex flag when that name remains available after flag normalization, extending the issue's name-over-value rule to this nested enum entry point.",
+      "expected_output": "MigrationWriter.serialize() returns \"re.compile('^foo$', re.RegexFlag['IGNORECASE'])\" with the import set {'import re'}, and evaluating that expression produces an equivalent regex object. candidate_a instead emits the numeric flag value 2.",
+      "test_patch": "diff --git a/tests/migrations/test_regex_flag_serialization.py b/tests/migrations/test_regex_flag_serialization.py\nnew file mode 100644\n--- /dev/null\n+++ b/tests/migrations/test_regex_flag_serialization.py\n@@ -0,0 +1,28 @@\n+import re\n+\n+from django.db.migrations.utils import RegexObject\n+from django.db.migrations.writer import MigrationWriter\n+from django.test import SimpleTestCase\n+\n+\n+class NamedRegexFlag(int):\n+    @property\n+    def name(self):\n+        return re.RegexFlag(self).name\n+\n+    def __xor__(self, other):\n+        return type(self)(super().__xor__(other))\n+\n+\n+class RegexFlagSerializationTests(SimpleTestCase):\n+    def test_named_integer_regex_flag(self):\n+        regex = RegexObject(re.compile('^foo$', re.IGNORECASE))\n+        regex.flags = NamedRegexFlag(regex.flags)\n+\n+        serialized, imports = MigrationWriter.serialize(regex)\n+\n+        self.assertEqual(\n+            serialized, \"re.compile('^foo$', re.RegexFlag['IGNORECASE'])\"\n+        )\n+        self.assertEqual(imports, {'import re'})\n+        self.assertEqual(eval(serialized, {'re': re}), regex)\n",
+      "test_command": "python tests/runtests.py migrations.test_regex_flag_serialization.RegexFlagSerializationTests.test_named_integer_regex_flag",
+      "test_patch_sha256": "1545eba16026ec79bb72ff781d44b9ca7796577f087e3057101df443542dbd1e",
+      "polarity": "must_fail",
+      "negative_specification": "The gold patch does not implement special handling for serializing regex flags inside RegexObject using their symbolic names; it only implements the EnumSerializer change that uses .name for direct enum values.",
+      "expected_failure": {
+        "forbidden_substrings": [
+          "collected 0 items",
+          "no tests ran",
+          "ERROR collecting",
+          "command not found",
+          "No such file or directory",
+          "Could not find a version that satisfies the requirement",
+          "Temporary failure in name resolution"
+        ],
+        "kind": "behavioral_test_failure",
+        "reference_log_sha256": "56bed93844b6fb31c6d516f71f6b445c353fc113a820777d300aff14c7d53f65",
+        "reference_returncode": 1,
+        "required_any_substrings": [
+          "AssertionError",
+          "FAILED",
+          "FAIL:"
+        ],
+        "required_substrings": [
+          "test_named_integer_regex_flag"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 1,
+    "passed": false,
+    "test_ran": true,
+    "duration_seconds": 1.405,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-11815--1545eba16026ec79",
+  "polarity": "must_fail"
+}

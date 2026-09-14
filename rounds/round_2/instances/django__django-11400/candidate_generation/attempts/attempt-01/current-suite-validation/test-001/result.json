@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "080af6d6fc4e90d670a5995cabc2739c6649d45397d6d3d065e1ed74be182e70",
+    "test_sha256": "7ee05aade4cfa4057b0d1a82708be0099dabe0b6592db533a9c29a400e0704d2",
+    "test": {
+      "test_id": "django__django-11400--7ee05aade4cfa405",
+      "test_name": "test_get_choices_uses_finalized_related_ordering",
+      "specification_gap": "When Field.get_choices() is called without an explicit ordering, its choices should follow the related model's finalized Meta.ordering after the relation's choice-value field is resolved. candidate_b snapshots Meta.ordering too early.",
+      "expected_output": "The choices must match the related model's resulting default queryset order: [(alpha.pk, 'alpha'), (zulu.pk, 'zulu')].",
+      "test_patch": "diff --git a/tests/model_fields/models.py b/tests/model_fields/models.py\n--- a/tests/model_fields/models.py\n+++ b/tests/model_fields/models.py\n@@ -11,6 +11,7 @@ from django.db.models.fields.files import ImageField, ImageFieldFile\n from django.db.models.fields.related import (\n     ForeignKey, ForeignObject, ManyToManyField, OneToOneField,\n )\n+from django.db.models.fields.reverse_related import ManyToOneRel\n from django.utils.translation import gettext_lazy as _\n \n try:\n@@ -32,6 +33,32 @@ class Bar(models.Model):\n     b = models.CharField(max_length=10)\n     a = models.ForeignKey(Foo, models.CASCADE, default=get_foo, related_name='bars')\n \n \n+class FinalizingOrderingRel(ManyToOneRel):\n+    def get_related_field(self):\n+        related_field = super().get_related_field()\n+        self.model._meta.ordering = self.model.finalized_ordering\n+        return related_field\n+\n+\n+class FinalizingOrderingForeignKey(ForeignKey):\n+    rel_class = FinalizingOrderingRel\n+\n+\n+class OrderingTarget(models.Model):\n+    finalized_ordering = ('name',)\n+    name = models.CharField(max_length=10)\n+\n+    class Meta:\n+        ordering = ('-name',)\n+\n+    def __str__(self):\n+        return self.name\n+\n+\n+class OrderingReference(models.Model):\n+    target = FinalizingOrderingForeignKey(OrderingTarget, models.CASCADE)\n+\n+\n class Whiz(models.Model):\n     CHOICES = (\n         ('Group 1', (\ndiff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py\n--- a/tests/model_fields/tests.py\n+++ b/tests/model_fields/tests.py\n@@ -7,8 +7,8 @@ from django.test import SimpleTestCase, TestCase\n from django.utils.functional import lazy\n \n from .models import (\n-    Bar, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,\n-    WhizIter, WhizIterEmpty,\n+    Bar, Choiceful, Foo, OrderingReference, OrderingTarget, RenamedField,\n+    VerboseNameField, Whiz, WhizDelayed, WhizIter, WhizIterEmpty,\n )\n \n \n@@ -239,6 +239,20 @@ class GetChoicesOrderingTests(TestCase):\n             [self.foo2, self.foo1]\n         )\n \n+    def test_get_choices_uses_finalized_related_ordering(self):\n+        \"\"\"\n+        Resolving the relation may finalize model metadata. Default choices\n+        should use the related model's resulting default ordering.\n+        \"\"\"\n+        original_ordering = OrderingTarget._meta.ordering\n+        self.addCleanup(setattr, OrderingTarget._meta, 'ordering', original_ordering)\n+        OrderingTarget._meta.ordering = ('-name',)\n+        OrderingTarget.objects.create(name='zulu')\n+        OrderingTarget.objects.create(name='alpha')\n+        field = OrderingReference._meta.get_field('target')\n+        choices = field.get_choices(include_blank=False)\n+        self.assertChoicesEqual(choices, list(OrderingTarget.objects.all()))\n+\n     def test_get_choices_reverse_related_field(self):\n         self.assertChoicesEqual(\n             self.field.remote_field.get_choices(include_blank=False, ordering=('a',)),\n",
+      "test_command": "./tests/runtests.py model_fields.tests.GetChoicesOrderingTests.test_get_choices_uses_finalized_related_ordering",
+      "test_patch_sha256": "7ee05aade4cfa4057b0d1a82708be0099dabe0b6592db533a9c29a400e0704d2",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.671,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-11400--7ee05aade4cfa405",
+  "polarity": "must_pass"
+}

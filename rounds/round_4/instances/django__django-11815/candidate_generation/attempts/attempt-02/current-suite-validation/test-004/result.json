@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "96fe80211676f7ac9b6688f2d26c97e31f1c00a5fedbdaec6228cbbe5ae0df2d",
+    "test_sha256": "96a73b66001a3471a9221fefa27b4b26f44797b6d8aa4ec3f0c2248ea39cee42",
+    "test": {
+      "test_id": "django__django-11815--96a73b66001a3471",
+      "test_name": "test_serialize_enum_expression_and_import_are_consistent",
+      "specification_gap": "Enum serialization must resolve the member name before rendering module-dependent output, so the serialized expression and its required import refer to the same resolved module.",
+      "expected_output": "MigrationWriter.serialize() returns (\"migrations.test_writer.DynamicNameEnum['VALUE']\", {'import migrations.test_writer'}).",
+      "test_patch": "diff --git a/tests/migrations/test_writer.py b/tests/migrations/test_writer.py\n--- a/tests/migrations/test_writer.py\n+++ b/tests/migrations/test_writer.py\n@@ -250,6 +250,32 @@ class WriterTests(SimpleTestCase):\n     def test_serialize_lazy_objects(self):\n         pattern = re.compile(r'^foo$')\n         lazy_pattern = SimpleLazyObject(lambda: pattern)\n         self.assertEqual(self.serialize_round_trip(lazy_pattern), pattern)\n \n+    def test_serialize_enum_expression_and_import_are_consistent(self):\n+        class MutableModuleName(str):\n+            current = 'stale.module'\n+\n+            def __str__(self):\n+                return self.current\n+\n+        module_name = MutableModuleName('stale.module')\n+\n+        class DynamicNameEnum(enum.Enum):\n+            VALUE = 'value'\n+\n+            @property\n+            def name(self):\n+                module_name.current = 'migrations.test_writer'\n+                return self._name_\n+\n+        DynamicNameEnum.__module__ = module_name\n+        self.assertSerializedResultEqual(\n+            DynamicNameEnum.VALUE,\n+            (\n+                \"migrations.test_writer.DynamicNameEnum['VALUE']\",\n+                {'import migrations.test_writer'},\n+            ),\n+        )\n+\n     def test_serialize_enums(self):\n         class TextEnum(enum.Enum):\n             A = 'a-value'\n",
+      "test_command": "python tests/runtests.py migrations.test_writer.WriterTests.test_serialize_enum_expression_and_import_are_consistent",
+      "test_patch_sha256": "96a73b66001a3471a9221fefa27b4b26f44797b6d8aa4ec3f0c2248ea39cee42",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.365,
+    "log_path": "test-004/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-11815--96a73b66001a3471",
+  "polarity": "must_pass"
+}

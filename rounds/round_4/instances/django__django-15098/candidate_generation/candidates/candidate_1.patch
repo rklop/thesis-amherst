@@ -1,0 +1,59 @@
+diff --git a/django/utils/translation/trans_real.py b/django/utils/translation/trans_real.py
+index 7dcc77b46c..4fc2a4e8b1 100644
+--- a/django/utils/translation/trans_real.py
++++ b/django/utils/translation/trans_real.py
+@@ -43,7 +43,7 @@ language_code_re = _lazy_re_compile(
+     re.IGNORECASE
+ )
+ 
+-language_code_prefix_re = _lazy_re_compile(r'^/(\w+([@-]\w+)?)(/|$)')
++language_code_prefix_re = _lazy_re_compile(r'^/(\w+([@-]\w+)*)(/|$)')
+ 
+ 
+ @receiver(setting_changed)
+@@ -509,10 +509,41 @@ def get_language_from_path(path, strict=False):
+     if not regex_match:
+         return None
+     lang_code = regex_match[1]
+-    try:
+-        return get_supported_language_variant(lang_code, strict=strict)
+-    except LookupError:
+-        return None
++    supported_lang_codes = get_languages()
++    # First check if the full match is in LANGUAGES.
++    if lang_code in supported_lang_codes:
++        try:
++            return get_supported_language_variant(lang_code, strict=strict)
++        except LookupError:
++            return None
++    # If the full match is not in LANGUAGES, try shorter prefixes.
++    # This handles cases like en-gb -> en where en-gb is not in LANGUAGES
++    # but en is.
++    # However, we limit the number of prefixes we try to avoid matching
++    # page paths like /de-simple-page/ which would incorrectly fall back to 'de'.
++    if '-' in lang_code:
++        # Check if the first component is a valid language
++        first_component = lang_code.split('-')[0]
++        if first_component in supported_lang_codes:
++            prefix = lang_code
++            # Only try up to 3 levels of prefixes (language-script-region)
++            for _ in range(3):
++                prefix = prefix.rsplit('-', 1)[0]
++                if prefix in supported_lang_codes:
++                    try:
++                        return get_supported_language_variant(prefix, strict=strict)
++                    except LookupError:
++                        pass
++                else:
++                    break
++        else:
++            # Try the full match with fallback (e.g., zh-cn -> zh-hans)
++            try:
++                return get_supported_language_variant(lang_code, strict=strict)
++            except LookupError:
++                pass
++    # No valid language found
++    return None
+ 
+ 
+ def get_language_from_request(request, check_path=False):

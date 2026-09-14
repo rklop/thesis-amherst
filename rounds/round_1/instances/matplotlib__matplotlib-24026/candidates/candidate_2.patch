@@ -1,0 +1,47 @@
+diff --git a/lib/matplotlib/stackplot.py b/lib/matplotlib/stackplot.py
+index c580043eeb..afc18dbe42 100644
+--- a/lib/matplotlib/stackplot.py
++++ b/lib/matplotlib/stackplot.py
+@@ -9,6 +9,7 @@ https://stackoverflow.com/q/2225995/
+ import numpy as np
+ 
+ from matplotlib import _api
++from matplotlib import colors as mcolors
+ 
+ __all__ = ['stackplot']
+ 
+@@ -70,7 +71,9 @@ def stackplot(axes, x, *args,
+ 
+     labels = iter(labels)
+     if colors is not None:
+-        axes.set_prop_cycle(color=colors)
++        # Resolve any CN color aliases to actual colors.
++        colors = [c if not mcolors.is_color_like(c) else mcolors.to_rgba(c)[:3]
++                  for c in colors]
+ 
+     # Assume data passed has not been 'stacked', so stack it here.
+     # We'll need a float buffer for the upcoming calculations.
+@@ -108,7 +111,10 @@ def stackplot(axes, x, *args,
+         stack += first_line
+ 
+     # Color between x = 0 and the first array.
+-    color = axes._get_lines.get_next_color()
++    if colors is not None:
++        color = colors[0 % len(colors)]
++    else:
++        color = axes._get_lines.get_next_color()
+     coll = axes.fill_between(x, first_line, stack[0, :],
+                              facecolor=color, label=next(labels, None),
+                              **kwargs)
+@@ -117,7 +123,10 @@ def stackplot(axes, x, *args,
+ 
+     # Color between array i-1 and array i
+     for i in range(len(y) - 1):
+-        color = axes._get_lines.get_next_color()
++        if colors is not None:
++            color = colors[(i + 1) % len(colors)]
++        else:
++            color = axes._get_lines.get_next_color()
+         r.append(axes.fill_between(x, stack[i, :], stack[i + 1, :],
+                                    facecolor=color, label=next(labels, None),
+                                    **kwargs))

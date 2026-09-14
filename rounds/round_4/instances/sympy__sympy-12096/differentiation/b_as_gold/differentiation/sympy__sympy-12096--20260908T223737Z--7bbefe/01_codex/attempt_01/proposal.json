@@ -1,0 +1,10 @@
+{
+  "test_name": "test_implemented_function_evalf_matrix_argument",
+  "specification_gap": "The generated patch rejects every argument with `is_number == False`. This incorrectly treats evaluatable non-scalar objects, such as numeric matrices, as unresolved symbolic expressions. The supplied gold patch rejects only non-numeric scalar `Expr` instances.",
+  "input_description": "Apply an implemented determinant function to the immutable numeric matrix `[[1, 2], [3, 4]]`, then call `.evalf()`.",
+  "expected_output": "The expression evaluates to the numeric determinant `-2` instead of remaining an unevaluated function call.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This type-boundary case distinguishes unresolved symbolic scalars from valid non-scalar numeric inputs. It exercises the public `implemented_function` and `evalf` APIs without inspecting implementation details.",
+  "test_patch": "diff --git a/sympy/core/tests/test_evalf.py b/sympy/core/tests/test_evalf.py\n--- a/sympy/core/tests/test_evalf.py\n+++ b/sympy/core/tests/test_evalf.py\n@@ -327,6 +327,18 @@ def test_implemented_function_evalf():\n     assert f(x).evalf() == f(x)\n     del f._imp_     # XXX: due to caching _imp_ would influence all other tests\n \n+\n+def test_implemented_function_evalf_matrix_argument():\n+    from sympy import ImmutableMatrix\n+    from sympy.utilities.lambdify import implemented_function\n+\n+    f = implemented_function(Function('matrix_determinant'),\n+                             lambda matrix: matrix.det())\n+    try:\n+        assert f(ImmutableMatrix([[1, 2], [3, 4]])).evalf() == -2\n+    finally:\n+        del f._imp_\n+\n \n def test_evaluate_false():\n     for no in [0, False]:\n",
+  "test_command": "python -m pytest -q sympy/core/tests/test_evalf.py::test_implemented_function_evalf_matrix_argument"
+}

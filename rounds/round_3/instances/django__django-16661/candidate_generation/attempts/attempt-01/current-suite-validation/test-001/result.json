@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "2bee39df68884cf7c3e57243bc2a4853d1e5795c4f5cf32dd7e92095b74ff2d2",
+    "test_sha256": "01774e12b2ba14f1f17cf1ffddfcab69782426b87d4226d06e0218c8145b536d",
+    "test": {
+      "test_id": "django__django-16661--01774e12b2ba14f1",
+      "test_name": "test_lookup_allowed_traversable_primary_key",
+      "specification_gap": "A configured list_filter path must remain allowed when it crosses a relational primary-key field that provides ORM traversal path information, even if a custom field's is_relation flag is false. Such a traversable primary key must not be collapsed as though it were merely the preceding relation's scalar target field.",
+      "expected_output": "lookup_allowed(\"restaurant__place__country\", \"test_value\") returns True because the exact traversable relation path is explicitly configured in list_filter.",
+      "test_patch": "diff --git a/tests/modeladmin/tests.py b/tests/modeladmin/tests.py\n--- a/tests/modeladmin/tests.py\n+++ b/tests/modeladmin/tests.py\n@@ -152,6 +152,37 @@ class ModelAdminTests(TestCase):\n         # OneToOneField and ForeignKey\n         self.assertIs(\n             ma.lookup_allowed(\"employee__department__code\", \"test_value\"), True\n         )\n \n+    @isolate_apps(\"modeladmin\")\n+    def test_lookup_allowed_traversable_primary_key(self):\n+        class TraversableOneToOneField(models.OneToOneField):\n+            def __init__(self, *args, **kwargs):\n+                super().__init__(*args, **kwargs)\n+                self.is_relation = False\n+\n+        class Country(models.Model):\n+            name = models.CharField(max_length=100)\n+\n+        class Place(models.Model):\n+            country = models.ForeignKey(Country, models.CASCADE)\n+\n+        class Restaurant(models.Model):\n+            place = TraversableOneToOneField(\n+                Place,\n+                models.CASCADE,\n+                primary_key=True,\n+            )\n+\n+        class Waiter(models.Model):\n+            restaurant = models.ForeignKey(Restaurant, models.CASCADE)\n+\n+        class WaiterAdmin(ModelAdmin):\n+            list_filter = [\"restaurant__place__country\"]\n+\n+        ma = WaiterAdmin(Waiter, self.site)\n+        self.assertIs(\n+            ma.lookup_allowed(\"restaurant__place__country\", \"test_value\"), True\n+        )\n+\n     def test_field_arguments(self):\n",
+      "test_command": "cd /testbed && python tests/runtests.py modeladmin.tests.ModelAdminTests.test_lookup_allowed_traversable_primary_key",
+      "test_patch_sha256": "01774e12b2ba14f1f17cf1ffddfcab69782426b87d4226d06e0218c8145b536d",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.72,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-16661--01774e12b2ba14f1",
+  "polarity": "must_pass"
+}

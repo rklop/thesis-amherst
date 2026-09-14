@@ -1,0 +1,73 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index aaf35ee37c..eb94313843 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -846,8 +846,66 @@ class Query(BaseExpression):
+         relabelling any references to them in select columns and the where
+         clause.
+         """
+-        assert set(change_map).isdisjoint(change_map.values())
+-
++        # Handle the case where change_map keys intersect with values.
++        # This can happen when combining queries with OR (e.g., qs1 | qs2).
++        # For example, if change_map = {'T4': 'T5', 'T5': 'T6'}, we need to
++        # process in a valid order to avoid using an alias that's being remapped.
++        
++        # First, separate the changes into those that can be applied directly
++        # and those that need special handling.
++        # Changes where the new_alias is also a key need to be deferred.
++        keys = set(change_map)
++        values = set(change_map.values())
++        
++        # If there's no intersection, we can proceed normally
++        if keys.isdisjoint(values):
++            self._change_aliases(change_map)
++            return
++        
++        # There are conflicts. We need to resolve them by using temporary aliases.
++        # We'll process in a specific order: first apply changes where the old_alias
++        # is not in the values (i.e., not being remapped), then handle the rest.
++        
++        # Create a copy of change_map to work with
++        change_map = dict(change_map)
++        
++        # Process non-conflicting changes first
++        while change_map:
++            # Find a change where the old_alias is not in the values
++            processed = False
++            for old_alias in list(change_map.keys()):
++                new_alias = change_map[old_alias]
++                if old_alias not in change_map.values():
++                    # Safe to process
++                    self._change_aliases({old_alias: new_alias})
++                    del change_map[old_alias]
++                    processed = True
++                    break
++            
++            if not processed:
++                # All remaining changes have conflicts. Pick one and resolve it
++                # by using a temporary alias.
++                old_alias, new_alias = next(iter(change_map.items()))
++                
++                # Find a temporary alias that's not in use
++                temp_alias = '%s_TEMP' % old_alias
++                counter = 1
++                while temp_alias in self.alias_refcount or temp_alias in change_map or temp_alias in change_map.values():
++                    temp_alias = '%s_TEMP%d' % (old_alias, counter)
++                    counter += 1
++                
++                # Apply in stages: new_alias -> temp_alias, then old_alias -> new_alias,
++                # then temp_alias -> new_alias
++                self._change_aliases({new_alias: temp_alias})
++                self._change_aliases({old_alias: new_alias})
++                self._change_aliases({temp_alias: new_alias})
++                del change_map[old_alias]
++
++    def _change_aliases(self, change_map):
++        """
++        Apply a batch of alias changes. This is the core implementation used
++        by change_aliases.
++        """
+         # 1. Update references in "select" (normal columns plus aliases),
+         # "group by" and "where".
+         self.where.relabel_aliases(change_map)

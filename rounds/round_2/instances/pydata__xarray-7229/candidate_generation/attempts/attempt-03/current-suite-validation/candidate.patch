@@ -1,0 +1,37 @@
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 3f7e8f74..c1108340 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -1860,7 +1860,31 @@ def where(cond, x, y, keep_attrs=None):
+     if keep_attrs is True:
+         # keep the attributes of x, the second parameter, by default to
+         # be consistent with the `where` method of `DataArray` and `Dataset`
+-        keep_attrs = lambda attrs, context: getattr(x, "attrs", {})
++        # Check if x has attrs (i.e., is a DataArray/Dataset) vs being a scalar
++        x_has_attrs = hasattr(x, "attrs")
++        x_attrs = getattr(x, "attrs", {})
++
++        def _keep_attrs(attrs, context):
++            # For coordinates (single element attrs list from build_output_coords_and_indexes),
++            # use attrs[0] which has the correct coordinate attrs
++            if len(attrs) == 1:
++                # If x is scalar (no attrs), return empty dict for main variable
++                if not x_has_attrs:
++                    return {}
++                return attrs[0] if attrs else {}
++            # For main variable (multiple elements from apply_dataarray_vfunc)
++            else:
++                # Use x.attrs if x is a DataArray/Dataset and has non-empty attrs
++                if x_has_attrs and x_attrs and x_attrs in attrs:
++                    return x_attrs
++                # If there are 3 inputs (cond, x, y), use attrs[1] which is from x
++                # This handles the case where x is a DataArray without attrs
++                if len(attrs) >= 2:
++                    return attrs[1] if attrs[1] else attrs[0]
++                # Otherwise use the first non-empty attrs
++                return next((attr for attr in attrs if attr), {})
++
++        keep_attrs = _keep_attrs
+ 
+     # alignment for three arguments is complicated, so don't support it yet
+     return apply_ufunc(

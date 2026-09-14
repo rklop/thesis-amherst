@@ -1,0 +1,33 @@
+diff --git a/sympy/physics/units/tests/test_quantities.py b/sympy/physics/units/tests/test_quantities.py
+--- a/sympy/physics/units/tests/test_quantities.py
++++ b/sympy/physics/units/tests/test_quantities.py
+@@ -541,6 +541,27 @@ def test_issue_20288():
+     assert SI._collect_factor_and_dimension(expr) == (1 + E, Dimension(1))
+ 
+ 
++def test_issue_24066_dimension_normalized_before_function_evaluation():
++    import sympy.physics.units.unitsystem as unitsystem_module
++
++    original_dimension = unitsystem_module.Dimension
++
++    class ChangesDimensionDuringEvaluation(Function):
++        @classmethod
++        def eval(cls, arg):
++            unitsystem_module.Dimension = lambda value: length
++
++    dimensionless_ratio = second/(ohm*vacuum_permittivity)
++    expr = ChangesDimensionDuringEvaluation(
++        dimensionless_ratio, evaluate=False)
++
++    try:
++        factor, dimension = SI._collect_factor_and_dimension(expr)
++    finally:
++        unitsystem_module.Dimension = original_dimension
++
++    assert factor.func is ChangesDimensionDuringEvaluation
++    assert dimension == Dimension(1)
++
++
+ def test_prefixed_property():
+     assert not meter.is_prefixed
+     assert not joule.is_prefixed

@@ -1,0 +1,10 @@
+{
+  "test_name": "test_filefield_clean_custom_boundfield",
+  "specification_gap": "The BoundField-based fix applies to disabled-field initial values. Cleaning an enabled FileField with no new upload must continue to obtain its existing value independently of the object returned by the public Field.get_bound_field() customization hook.",
+  "input_description": "A bound form submits no file for an enabled, required custom FileField whose initial value is 'resume.txt'. The field's get_bound_field() returns the same tuple-shaped custom value already supported by the existing custom BoundField test.",
+  "expected_output": "The form is valid and cleaned_data['file1'] equals 'resume.txt'.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "candidate_b additionally reads self[name].initial for enabled FileFields, so validation raises AttributeError when the supported customization hook returns a non-BoundField object. candidate_a limits the change to disabled fields and preserves the FileField's existing-value fallback.",
+  "test_patch": "diff --git a/tests/forms_tests/tests/test_forms.py b/tests/forms_tests/tests/test_forms.py\n--- a/tests/forms_tests/tests/test_forms.py\n+++ b/tests/forms_tests/tests/test_forms.py\n@@ -2076,6 +2076,18 @@ class FormsTestCase(SimpleTestCase):\n \n         f = SampleForm()\n         self.assertEqual(f['name'], (f, 'name'))\n \n+    def test_filefield_clean_custom_boundfield(self):\n+        class CustomFileField(FileField):\n+            def get_bound_field(self, form, name):\n+                return (form, name)\n+\n+        class FileForm(Form):\n+            file1 = CustomFileField(initial='resume.txt')\n+\n+        form = FileForm({})\n+        self.assertTrue(form.is_valid())\n+        self.assertEqual(form.cleaned_data['file1'], 'resume.txt')\n+\n     def test_initial_datetime_values(self):\n         now = datetime.datetime.now()\n         # Nix microseconds (since they should be ignored). #22502\n",
+  "test_command": "python tests/runtests.py forms_tests.tests.test_forms.FormsTestCase.test_filefield_clean_custom_boundfield"
+}

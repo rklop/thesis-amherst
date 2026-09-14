@@ -1,0 +1,48 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "7ac019712cb3cd8b212aa9e65b7db8118b807ff7a45026e9045ea14e382a91bc",
+    "test_sha256": "cf6bf156a56266c7e967ce6f415fd9939252c4a2825b94fc45e9bd9abd012d08",
+    "test": {
+      "test_id": "django__django-15128--cf6bf156a56266c7",
+      "test_name": "test_or_with_multichar_alias_prefix",
+      "specification_gap": "QuerySet combination must avoid alias collisions when Django uses a multi-character alias prefix, not only its initial one-character prefix.",
+      "expected_output": "The combined QuerySet evaluates without an alias-generation exception and returns exactly the two created BaseUser primary keys.",
+      "test_patch": "diff --git a/tests/queries/tests.py b/tests/queries/tests.py\n--- a/tests/queries/tests.py\n+++ b/tests/queries/tests.py\n@@ -15,7 +15,7 @@ from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature\n from django.test.utils import CaptureQueriesContext\n \n from .models import (\n-    FK1, Annotation, Article, Author, BaseA, Book, CategoryItem,\n+    FK1, Annotation, Article, Author, BaseA, BaseUser, Book, CategoryItem,\n     CategoryRelationship, Celebrity, Channel, Chapter, Child, ChildObjectA,\n     Classroom, CommonMixedCaseForeignKeys, Company, Cover, CustomPk,\n     CustomPkTag, DateTimePK, Detail, DumbCategory, Eaten, Employment,\n@@ -2095,6 +2095,32 @@ class QuerySetBitwiseOperationTests(TestCase):\n         cls.room_3 = Classroom.objects.create(school=cls.school, has_blackboard=True, name='Room 3')\n         cls.room_4 = Classroom.objects.create(school=cls.school, has_blackboard=False, name='Room 4')\n \n+    def test_or_with_multichar_alias_prefix(self):\n+        staff = Staff.objects.create(name='staff')\n+        staff_user = StaffUser.objects.create(staff=staff)\n+        other_user = BaseUser.objects.create()\n+        Task.objects.create(\n+            title='task',\n+            owner=other_user,\n+            creator=staff_user,\n+        )\n+        subquery = BaseUser.objects.filter(pk=staff_user.pk)\n+\n+        # Alias prefixes become multi-character after the one-letter prefixes\n+        # are exhausted.\n+        queryset = BaseUser.objects.all()\n+        queryset.query.alias_prefix = 'AA'\n+        lhs = queryset.filter(staffuser__staff=staff)\n+        rhs = queryset.filter(\n+            Q(owner__creator__in=subquery) |\n+            Q(creator__owner__in=subquery)\n+        )\n+\n+        self.assertCountEqual(\n+            (lhs | rhs).values_list('pk', flat=True),\n+            [staff_user.pk, other_user.pk],\n+        )\n+\n     @skipUnlessDBFeature('allow_sliced_subqueries_with_in')\n     def test_or_with_rhs_slice(self):\n         qs1 = Classroom.objects.filter(has_blackboard=True)\n",
+      "test_command": "cd /testbed && ./tests/runtests.py queries.tests.QuerySetBitwiseOperationTests.test_or_with_multichar_alias_prefix",
+      "test_patch_sha256": "cf6bf156a56266c7e967ce6f415fd9939252c4a2825b94fc45e9bd9abd012d08",
+      "polarity": "must_fail",
+      "negative_specification": "When combining QuerySets with a multi-character alias prefix (e.g., 'AA'), the combine operation must not crash with a TypeError from ord() expecting a single character.",
+      "expected_failure": {
+        "forbidden_substrings": [
+          "collected 0 items",
+          "no tests ran",
+          "ERROR collecting",
+          "command not found",
+          "No such file or directory",
+          "Could not find a version that satisfies the requirement",
+          "Temporary failure in name resolution"
+        ],
+        "kind": "behavioral_test_failure",
+        "reference_log_sha256": "0870fffe9b05b40ee6e88aacc145fe823e0c3e48cc4bddb7afb117e47d5b6b13",
+        "reference_returncode": 1,
+        "required_any_substrings": [
+          "FAILED"
+        ],
+        "required_substrings": [
+          "test_or_with_multichar_alias_prefix"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.648,
+    "log_path": "test-003/submitted_candidate.log"
+  },
+  "outcome": "violated",
+  "test_id": "django__django-15128--cf6bf156a56266c7",
+  "polarity": "must_fail"
+}

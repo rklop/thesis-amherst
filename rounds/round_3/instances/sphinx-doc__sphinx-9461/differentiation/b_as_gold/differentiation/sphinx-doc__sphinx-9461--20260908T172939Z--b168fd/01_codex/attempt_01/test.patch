@@ -1,0 +1,48 @@
+diff --git a/tests/roots/test-ext-autodoc/target/properties.py b/tests/roots/test-ext-autodoc/target/properties.py
+--- a/tests/roots/test-ext-autodoc/target/properties.py
++++ b/tests/roots/test-ext-autodoc/target/properties.py
+@@ -4,3 +4,11 @@ class Foo:
+     @property
+     def prop(self) -> int:
+         """docstring"""
++
++
++class PrivateClassProperty:
++    @classmethod
++    @property
++    def __prop(cls) -> int:
++        """private class property docstring"""
++        return 42
+diff --git a/tests/test_ext_autodoc_autoproperty.py b/tests/test_ext_autodoc_autoproperty.py
+--- a/tests/test_ext_autodoc_autoproperty.py
++++ b/tests/test_ext_autodoc_autoproperty.py
+@@ -9,6 +9,8 @@
+     :license: BSD, see LICENSE for details.
+ """
+ 
++import sys
++
+ import pytest
+ 
+ from .test_ext_autodoc import do_autodoc
+@@ -26,3 +28,20 @@ def test_properties(app):
+         '   docstring',
+         '',
+     ]
++
++
++@pytest.mark.skipif(sys.version_info < (3, 9),
++                    reason='classmethod can wrap property since python3.9.')
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_private_class_property(app):
++    actual = do_autodoc(
++        app, 'property', 'target.properties.PrivateClassProperty.__prop'
++    )
++    output = {line.strip() for line in actual}
++
++    assert {
++        '.. py:property:: PrivateClassProperty.__prop',
++        ':classmethod:',
++        ':type: int',
++        'private class property docstring',
++    } <= output

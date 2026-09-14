@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "31ee31c57b541278aa584d68bfa697c775f4b6145c337393d3fdc0aa47564830",
+    "test_sha256": "691376514c651900a9cd2b0214ffe5b2f68b0d437442dcb89d53c1f5eb433bc0",
+    "test": {
+      "test_id": "django__django-15128--691376514c651900",
+      "test_name": "test_combine_or_then_deeper_self_relation",
+      "specification_gap": "An OR-combined QuerySet must remain safely composable with subsequent related-field filters, including filters that require additional aliases for repeated self-joins.",
+      "expected_output": "The final QuerySet evaluates without an alias collision and contains only the leaf Tag whose fourth ancestor is root.",
+      "test_patch": "diff --git a/tests/queries/tests.py b/tests/queries/tests.py\n--- a/tests/queries/tests.py\n+++ b/tests/queries/tests.py\n@@ -1327,6 +1327,22 @@ class Queries4Tests(TestCase):\n     def test_combine_or_filter_reuse(self):\n         combined = Author.objects.filter(name='a1') | Author.objects.filter(name='a3')\n         self.assertEqual(combined.get(name='a1'), self.a1)\n \n+    def test_combine_or_then_deeper_self_relation(self):\n+        root = Tag.objects.create(name='root')\n+        level1 = Tag.objects.create(name='level1', parent=root)\n+        level2 = Tag.objects.create(name='level2', parent=level1)\n+        level3 = Tag.objects.create(name='level3', parent=level2)\n+        leaf = Tag.objects.create(name='leaf', parent=level3)\n+\n+        combined = (\n+            Tag.objects.filter(parent__name='level3') |\n+            Tag.objects.filter(parent__parent__parent__name='level1')\n+        )\n+        filtered = combined.filter(\n+            parent__parent__parent__parent__name='root',\n+        )\n+        self.assertSequenceEqual(filtered, [leaf])\n+\n     def test_join_reuse_order(self):\n         # Join aliases are reused in order. This shouldn't raise AssertionError\n         # because change_map contains a circular reference (#26522).\n",
+      "test_command": "./tests/runtests.py queries.tests.Queries4Tests.test_combine_or_then_deeper_self_relation",
+      "test_patch_sha256": "691376514c651900a9cd2b0214ffe5b2f68b0d437442dcb89d53c1f5eb433bc0",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.698,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-15128--691376514c651900",
+  "polarity": "must_pass"
+}

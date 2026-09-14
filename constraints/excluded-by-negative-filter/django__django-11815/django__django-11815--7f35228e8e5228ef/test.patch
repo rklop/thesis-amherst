@@ -1,0 +1,47 @@
+diff --git a/tests/migrations/test_writer.py b/tests/migrations/test_writer.py
+--- a/tests/migrations/test_writer.py
++++ b/tests/migrations/test_writer.py
+@@ -35,6 +35,25 @@ class Money(decimal.Decimal):
+         )
+ 
+ 
++class NameAwareEnumMeta(enum.EnumMeta):
++    def __getattribute__(cls, attr):
++        if attr == '__name__' and not super().__getattribute__('_member_name_read'):
++            return 'UnavailableEnum'
++        return super().__getattribute__(attr)
++
++
++class NameAwareEnum(enum.Enum, metaclass=NameAwareEnumMeta):
++    VALUE = 'translatable value'
++
++    @property
++    def name(self):
++        self.__class__._member_name_read = True
++        return super().name
++
++
++NameAwareEnum._member_name_read = False
++
++
+ class TestModel1:
+     def upload_to(self):
+         return '/somewhere/dynamic/'
+@@ -303,9 +322,17 @@ class WriterTests(SimpleTestCase):
+             "models.IntegerField(choices=["
+             "(1, migrations.test_writer.IntEnum(1)), "
+             "(2, migrations.test_writer.IntEnum(2))], "
+             "default=migrations.test_writer.IntEnum(1))"
+         )
+ 
++    def test_serialize_enum_member_name_before_class_name(self):
++        NameAwareEnum._member_name_read = False
++        expected = (
++            "migrations.test_writer.NameAwareEnum['VALUE']",
++            {'import migrations.test_writer'},
++        )
++        self.assertSerializedResultEqual(NameAwareEnum.VALUE, expected)
++
+     def test_serialize_choices(self):
+         class TextChoices(models.TextChoices):
+             A = 'A', 'A value'

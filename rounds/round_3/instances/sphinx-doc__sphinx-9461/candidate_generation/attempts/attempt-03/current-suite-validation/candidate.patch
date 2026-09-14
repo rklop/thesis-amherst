@@ -1,0 +1,153 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..2780cc710 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -853,6 +853,7 @@ class PyProperty(PyObject):
+     option_spec.update({
+         'abstractmethod': directives.flag,
+         'type': directives.unchanged,
++        'classmethod': directives.flag,
+     })
+ 
+     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:
+@@ -866,6 +867,8 @@ class PyProperty(PyObject):
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+         prefix = ['property']
++        if 'classmethod' in self.options:
++            prefix.insert(0, 'class')
+         if 'abstractmethod' in self.options:
+             prefix.insert(0, 'abstract')
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..6554644b8 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -2663,6 +2663,23 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+                             ) -> bool:
+         return inspect.isproperty(member) and isinstance(parent, ClassDocumenter)
+ 
++    def get_doc(self, ignore: Any = None) -> List[List[str]]:
++        """Override to get the docstring from the property's fget function
++        when the object is a classmethod wrapping a property."""
++        if isinstance(self.object, classmethod):
++            # Get the property from the classmethod's __func__
++            prop = getattr(self.object, '__func__', None)
++            if prop and isinstance(prop, property):
++                # Get the docstring from the fget function
++                docstring = getdoc(prop.fget, self.get_attr,
++                                   self.config.autodoc_inherit_docstrings,
++                                   self.parent, self.object_name)
++                if docstring:
++                    tab_width = self.directive.state.document.settings.tab_width
++                    return [prepare_docstring(docstring, ignore, tab_width)]
++                return []
++        return super().get_doc(ignore)
++
+     def document_members(self, all_members: bool = False) -> None:
+         pass
+ 
+@@ -2673,12 +2690,22 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+     def add_directive_header(self, sig: str) -> None:
+         super().add_directive_header(sig)
+         sourcename = self.get_sourcename()
+-        if inspect.isabstractmethod(self.object):
++        
++        # Check if this is a classmethod decorated with property (Python 3.9+)
++        # In this case, self.object is a classmethod whose __func__ is a property
++        if isinstance(self.object, classmethod):
++            self.add_line('   :classmethod:', sourcename)
++            # Get the actual property object for further processing
++            obj = getattr(self.object, '__func__', None)
++        else:
++            obj = self.object
++
++        if inspect.isabstractmethod(obj):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
+-        if safe_getattr(self.object, 'fget', None) and self.config.autodoc_typehints != 'none':
++        if safe_getattr(obj, 'fget', None) and self.config.autodoc_typehints != 'none':
+             try:
+-                signature = inspect.signature(self.object.fget,
++                signature = inspect.signature(obj.fget,
+                                               type_aliases=self.config.autodoc_type_aliases)
+                 if signature.return_annotation is not Parameter.empty:
+                     objrepr = stringify_typehint(signature.return_annotation)
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..bb03468fd 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -17,7 +17,7 @@ from sphinx.deprecation import RemovedInSphinx50Warning
+ from sphinx.ext.autodoc.mock import ismock, undecorate
+ from sphinx.pycode import ModuleAnalyzer, PycodeError
+ from sphinx.util import logging
+-from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass,
++from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass, isproperty,
+                                  safe_getattr)
+ 
+ if False:
+@@ -109,6 +109,20 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
+             mangled_name = mangle(obj, attrname)
+             obj = attrgetter(obj, mangled_name)
+ 
++            # Check if this is a classmethod decorated with property (Python 3.9+)
++            # In this case, getattr() evaluates the property and returns its value
++            # instead of the descriptor, so we need to get the descriptor from __dict__
++            # But first we call attrgetter to record the lookup (for custom attrgetters)
++            if isclass(parent):
++                # Call attrgetter to record the lookup (satisfies custom attrgetter requirements)
++                attrgetter(parent, mangled_name)
++                # Now get the descriptor from __dict__
++                obj_dict = getattr(parent, '__dict__', None)
++                if obj_dict and mangled_name in obj_dict:
++                    descriptor = obj_dict[mangled_name]
++                    if isproperty(descriptor):
++                        obj = descriptor
++
+             try:
+                 logger.debug('[autodoc] => %r', obj)
+             except TypeError:
+@@ -281,7 +295,21 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable
+             unmangled = unmangle(subject, name)
+             if unmangled and unmangled not in members:
+                 if name in obj_dict:
+-                    members[unmangled] = ObjectMember(unmangled, value, class_=subject)
++                    # Check if this is a classmethod decorated with property (Python 3.9+)
++                    # In this case, obj_dict[name] is a classmethod whose __func__ is a property
++                    # We need to use the descriptor from __dict__ instead of the evaluated value
++                    obj = obj_dict[name]
++                    if isproperty(obj):
++                        # Get docstring from the property's fget function
++                        docstring = None
++                        if isinstance(obj, classmethod):
++                            prop = getattr(obj, '__func__', None)
++                            if prop and isinstance(prop, property) and prop.fget:
++                                docstring = prop.fget.__doc__
++                        members[unmangled] = ObjectMember(unmangled, obj, class_=subject,
++                                                        docstring=docstring)
++                    else:
++                        members[unmangled] = ObjectMember(unmangled, value, class_=subject)
+                 else:
+                     members[unmangled] = ObjectMember(unmangled, value)
+         except AttributeError:
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 23dd9e930..6647bf9b4 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -390,7 +390,15 @@ def isproperty(obj: Any) -> bool:
+         if isinstance(obj, cached_property):
+             return True
+ 
+-    return isinstance(obj, property)
++    if isinstance(obj, property):
++        return True
++
++    # Support for classmethod decorated with property (Python 3.9+)
++    # @classmethod @property creates a classmethod whose __func__ is a property
++    if isinstance(obj, classmethod):
++        return isinstance(getattr(obj, '__func__', None), property)
++
++    return False
+ 
+ 
+ def isgenericalias(obj: Any) -> bool:

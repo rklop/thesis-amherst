@@ -1,0 +1,33 @@
+diff --git a/tests/timezones/tests.py b/tests/timezones/tests.py
+--- a/tests/timezones/tests.py
++++ b/tests/timezones/tests.py
+@@ -349,9 +349,29 @@ class NewDatabaseTests(TestCase):
+             self.assertEqual(Event.objects.filter(dt__week_day=7).count(), 1)
+             self.assertEqual(Event.objects.filter(dt__hour=22).count(), 1)
+             self.assertEqual(Event.objects.filter(dt__minute=30).count(), 2)
+             self.assertEqual(Event.objects.filter(dt__second=0).count(), 2)
+ 
++    @skipIfDBFeature('supports_timezones')
++    def test_query_datetime_lookup_with_database_timezone(self):
++        original_timezone = connection.settings_dict['TIME_ZONE']
++        try:
++            connection.settings_dict['TIME_ZONE'] = 'Asia/Bangkok'
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
++            dt = datetime.datetime(2011, 1, 1, 10, 30, tzinfo=UTC)
++            Event.objects.create(dt=dt)
++            self.assertEqual(Event.objects.filter(dt__hour=13).count(), 1)
++        finally:
++            connection.settings_dict['TIME_ZONE'] = original_timezone
++            connection.timezone
++            del connection.timezone
++            connection.timezone_name
++            del connection.timezone_name
++
+     def test_query_aggregation(self):
+         # Only min and max make sense for datetimes.
+         Event.objects.create(dt=datetime.datetime(2011, 9, 1, 23, 20, 20, tzinfo=EAT))
+         Event.objects.create(dt=datetime.datetime(2011, 9, 1, 13, 20, 30, tzinfo=EAT))

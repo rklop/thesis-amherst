@@ -1,0 +1,39 @@
+diff --git a/tests/lookup/test_lookups.py b/tests/lookup/test_lookups.py
+--- a/tests/lookup/test_lookups.py
++++ b/tests/lookup/test_lookups.py
+@@ -1,8 +1,10 @@
+-from datetime import datetime
++from datetime import date, datetime
+ from unittest import mock
+ 
+-from django.db.models import DateTimeField, Value
+-from django.db.models.lookups import Lookup, YearLookup
++from django.db import connection
++from django.db.models import DateField, DateTimeField, Value
++from django.db.models.functions import ExtractIsoYear
++from django.db.models.lookups import IsoYearLookup, Lookup, YearLookup
+ from django.test import SimpleTestCase
+ 
+ 
+@@ -29,6 +31,23 @@ class LookupTests(SimpleTestCase):
+         self.assertNotEqual(hash(lookup), hash(CustomLookup(lookup.lhs, lookup.rhs)))
+ 
+ 
++class IsoYearLookupTests(SimpleTestCase):
++    def test_year_keyword_argument(self):
++        lookup = IsoYearLookup(
++            lhs=ExtractIsoYear(
++                Value(date(2015, 1, 1), output_field=DateField()),
++            ),
++            rhs=2015,
++        )
++        bounds = lookup.iso_year_lookup_bounds(connection, year=2015)
++        self.assertEqual(bounds, [
++            connection.ops.adapt_datefield_value(date(2014, 12, 29)),
++            connection.ops.adapt_datefield_value(date(2016, 1, 3)),
++        ])
++
++
+ class YearLookupTests(SimpleTestCase):
+     def test_get_bound_params(self):
+         look_up = YearLookup(

@@ -1,0 +1,10 @@
+{
+  "test_name": "FormsTestCase.test_filefield_initial_callable",
+  "specification_gap": "An enabled FileField with no uploaded replacement must reuse the callable initial value cached by its BoundField during cleaning, rather than evaluating the callable again.",
+  "input_description": "Create an empty bound form whose FileField initial callable yields \"resume.txt\" first and \"alternate.txt\" second. Read form['file1'].initial before triggering validation.",
+  "expected_output": "The form has no errors and cleaned_data['file1'] is \"resume.txt\", identical to the initial value already exposed by the BoundField.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "The existing constant-callable test cannot reveal repeated evaluation. This dynamic callable exercises FileField's special initial fallback and directly tests the issue's public consistency invariant; candidate_a instead cleans to \"alternate.txt\".",
+  "test_patch": "diff --git a/tests/forms_tests/tests/test_forms.py b/tests/forms_tests/tests/test_forms.py\n--- a/tests/forms_tests/tests/test_forms.py\n+++ b/tests/forms_tests/tests/test_forms.py\n@@ -2496,11 +2496,14 @@ class FormsTestCase(SimpleTestCase):\n         )\n \n     def test_filefield_initial_callable(self):\n+        initial_values = iter(['resume.txt', 'alternate.txt'])\n+\n         class FileForm(forms.Form):\n-            file1 = forms.FileField(initial=lambda: 'resume.txt')\n+            file1 = forms.FileField(initial=lambda: next(initial_values))\n \n         f = FileForm({})\n+        initial = f['file1'].initial\n         self.assertEqual(f.errors, {})\n-        self.assertEqual(f.cleaned_data['file1'], 'resume.txt')\n+        self.assertEqual(f.cleaned_data['file1'], initial)\n \n     def test_filefield_with_fileinput_required(self):\n",
+  "test_command": "cd /testbed && python tests/runtests.py forms_tests.tests.test_forms.FormsTestCase.test_filefield_initial_callable"
+}

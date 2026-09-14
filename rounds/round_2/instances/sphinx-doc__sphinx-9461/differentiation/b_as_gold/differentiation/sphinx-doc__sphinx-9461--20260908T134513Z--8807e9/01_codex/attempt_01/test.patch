@@ -1,0 +1,60 @@
+diff --git a/tests/roots/test-ext-autodoc/target/properties.py b/tests/roots/test-ext-autodoc/target/properties.py
+--- a/tests/roots/test-ext-autodoc/target/properties.py
++++ b/tests/roots/test-ext-autodoc/target/properties.py
+@@ -4,3 +4,21 @@ class Foo:
+     @property
+     def prop(self) -> int:
+         """docstring"""
++
++
++class ClassPropertyBase:
++    @classmethod
++    @property
++    def prop(cls):
++        """inherited class property"""
++        return 'base'
++
++
++class ClassPropertyChild(ClassPropertyBase):
++    pass
++
++
++def replacement_property(self):
++    """replacement property"""
++    return 'replacement'
++
++
++replacement_prop = property(replacement_property)
+diff --git a/tests/test_ext_autodoc_autoproperty.py b/tests/test_ext_autodoc_autoproperty.py
+--- a/tests/test_ext_autodoc_autoproperty.py
++++ b/tests/test_ext_autodoc_autoproperty.py
+@@ -26,3 +26,26 @@ def test_properties(app):
+         '   docstring',
+         '',
+     ]
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_attrgetter_result_takes_precedence_over_inherited_classproperty(app):
++    from target.properties import ClassPropertyChild, replacement_prop
++
++    def special_getattr(obj, name, *defargs):
++        if obj is ClassPropertyChild and name == 'prop':
++            return replacement_prop
++        return getattr(obj, name, *defargs)
++
++    app.add_autodoc_attrgetter(type, special_getattr)
++
++    actual = do_autodoc(
++        app,
++        'property',
++        'target.properties.ClassPropertyChild.prop',
++    )
++    assert list(actual) == [
++        '',
++        '.. py:property:: ClassPropertyChild.prop',
++        '   :module: target.properties',
++        '',
++        '   replacement property',
++        '',
++    ]

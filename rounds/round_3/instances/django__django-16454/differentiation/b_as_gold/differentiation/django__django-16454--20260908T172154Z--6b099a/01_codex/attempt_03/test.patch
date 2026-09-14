@@ -1,0 +1,34 @@
+diff --git a/tests/user_commands/tests.py b/tests/user_commands/tests.py
+--- a/tests/user_commands/tests.py
++++ b/tests/user_commands/tests.py
+@@ -405,6 +405,29 @@ class CommandTests(SimpleTestCase):
+         msg = "Error: the following arguments are required: subcommand"
+         with self.assertRaisesMessage(CommandError, msg):
+             management.call_command("subparser_dest", subcommand="foo", bar=12)
+ 
++    def test_subparser_parser_class_preserves_default(self):
++        class CliCommandParser(management.CommandParser):
++            def __init__(
++                self, *, called_from_command_line=True, **kwargs
++            ):
++                super().__init__(
++                    called_from_command_line=called_from_command_line, **kwargs
++                )
++
++        parser = management.CommandParser(prog="manage.py command")
++        subparsers = parser.add_subparsers(parser_class=CliCommandParser)
++        child_parser = subparsers.add_parser("child")
++        child_parser.add_argument("name")
++
++        with captured_stderr() as stderr, self.assertRaises(SystemExit) as cm:
++            parser.parse_args(["child"])
++        self.assertEqual(cm.exception.code, 2)
++        self.assertIn(
++            "manage.py command child: error: "
++            "the following arguments are required: name",
++            stderr.getvalue(),
++        )
++
+     def test_create_parser_kwargs(self):
+         """BaseCommand.create_parser() passes kwargs to CommandParser."""
+         epilog = "some epilog text"

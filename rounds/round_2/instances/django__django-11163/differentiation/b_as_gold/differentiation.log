@@ -1,0 +1,69 @@
+2026-09-08T14:14:38.127377+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-09-08T14:14:38.707212+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-09-08T14:14:39.183620+00:00 [INFO] candidate_a applies cleanly
+2026-09-08T14:14:39.596763+00:00 [INFO] candidate_b applies cleanly
+2026-09-08T14:14:39.596831+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-09-08T14:14:40.919873+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/runs/spec-refinement-core-r2-negative-filter-on-v1/round-02/bidirectional-differentiation/instances/django__django-11163/b_as_gold/differentiation/django__django-11163--20260908T141438Z--5d1045/workspace/repo
+2026-09-08T14:14:40.919929+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-09-08T14:14:40.920463+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-09-08T14:14:42.452415+00:00 [INFO] Codex thread started: 01a0815f-0207-7ca3-9648-39b4d81d7097
+2026-09-08T14:19:04.341600+00:00 [INFO] Codex turn completed; usage={'input_tokens': 265934, 'cached_input_tokens': 236288, 'cache_write_input_tokens': 0, 'output_tokens': 6154, 'reasoning_output_tokens': 3798}
+2026-09-08T14:19:05.492468+00:00 [INFO] Codex attempt 1 proposed 'test_empty_fields_do_not_save_declared_many_to_many_field' in tests/model_forms/tests.py
+2026-09-08T14:19:07.181472+00:00 [INFO] attempt 1 candidate_a: ran=True passed=False exit=1
+2026-09-08T14:19:08.916972+00:00 [INFO] attempt 1 candidate_b: ran=True passed=True exit=0
+2026-09-08T14:19:08.918067+00:00 [INFO] Validated separation on Codex attempt 1: candidate_a=FAIL, candidate_b=PASS
+2026-09-08T14:19:08.918100+00:00 [STAGE] 5/6 MiniMax rating disabled; execution-only mode
+2026-09-08T14:19:08.918130+00:00 [STAGE] 6/6 Writing consolidated results
+2026-09-08T14:19:09.154699+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/model_forms/tests.py b/tests/model_forms/tests.py
+--- a/tests/model_forms/tests.py
++++ b/tests/model_forms/tests.py
+@@ -191,13 +191,39 @@ class ModelFormBaseTest(TestCase):
+     def test_empty_fields_on_modelform(self):
+         """
+         No fields on a ModelForm should actually result in no fields.
+         """
+         class EmptyPersonForm(forms.ModelForm):
+             class Meta:
+                 model = Person
+                 fields = ()
+ 
+         form = EmptyPersonForm()
+         self.assertEqual(len(form.fields), 0)
+ 
++    def test_empty_fields_do_not_save_declared_many_to_many_field(self):
++        """
++        ModelForm.save() doesn't save fields omitted by an empty Meta.fields.
++        """
++        class EmptyItemForm(forms.ModelForm):
++            colours = forms.ModelMultipleChoiceField(Colour.objects.all())
++
++            class Meta:
++                model = ColourfulItem
++                fields = []
++
++        old_colour = Colour.objects.create(name='Old')
++        new_colour = Colour.objects.create(name='New')
++        item = ColourfulItem.objects.create(name='Item')
++        item.colours.add(old_colour)
++
++        form = EmptyItemForm(
++            {'colours': [new_colour.pk]}, instance=item,
++        )
++        self.assertTrue(form.is_valid())
++        form.save()
++        self.assertEqual(
++            list(item.colours.values_list('pk', flat=True)),
++            [old_colour.pk],
++        )
++
+     def test_empty_fields_to_construct_instance(self):
+         """
+         No fields should be set on a model instance if construct_instance receives fields=().
+===== END DIFFERENTIATING TEST =====
+
+2026-09-08T14:19:09.154855+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/runs/spec-refinement-core-r2-negative-filter-on-v1/round-02/bidirectional-differentiation/instances/django__django-11163/b_as_gold/differentiation/django__django-11163--20260908T141438Z--5d1045/SUMMARY.md

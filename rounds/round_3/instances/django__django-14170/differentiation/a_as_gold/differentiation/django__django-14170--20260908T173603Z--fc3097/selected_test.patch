@@ -1,0 +1,32 @@
+diff --git a/tests/db_functions/datetime/test_extract_trunc.py b/tests/db_functions/datetime/test_extract_trunc.py
+--- a/tests/db_functions/datetime/test_extract_trunc.py
++++ b/tests/db_functions/datetime/test_extract_trunc.py
+@@ -10,6 +10,7 @@ except ImportError:
+         zoneinfo = None
+ 
+ from django.conf import settings
++from django.db import connection
+ from django.db.models import (
+     DateField, DateTimeField, F, IntegerField, Max, OuterRef, Subquery,
+     TimeField,
+@@ -346,7 +347,20 @@ class DateFunctionTests(TestCase):
+         )
+         # Both dates are from the same week year.
+         self.assertEqual(DTModel.objects.filter(start_datetime__iso_year=ExtractIsoYear('start_datetime')).count(), 2)
+ 
++    def test_extract_iso_year_lookup_bounds_keyword(self):
++        lookup = (
++            DTModel.objects.filter(start_date__iso_year=2015)
++            .query.where.children[0]
++        )
++        self.assertEqual(
++            lookup.iso_year_lookup_bounds(connection, year=2015),
++            [
++                connection.ops.adapt_datefield_value(datetime(2014, 12, 29).date()),
++                connection.ops.adapt_datefield_value(datetime(2016, 1, 3).date()),
++            ],
++        )
++
+     def test_extract_iso_year_func_boundaries(self):
+         end_datetime = datetime(2016, 6, 15, 14, 10, 50, 123)
+         if settings.USE_TZ:

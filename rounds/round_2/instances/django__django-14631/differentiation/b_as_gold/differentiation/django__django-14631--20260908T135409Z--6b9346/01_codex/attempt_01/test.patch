@@ -1,0 +1,35 @@
+diff --git a/tests/forms_tests/tests/test_forms.py b/tests/forms_tests/tests/test_forms.py
+--- a/tests/forms_tests/tests/test_forms.py
++++ b/tests/forms_tests/tests/test_forms.py
+@@ -8,7 +8,7 @@ from django.core.validators import MaxValueValidator, RegexValidator
+ from django.forms import (
+-    BooleanField, CharField, CheckboxSelectMultiple, ChoiceField, DateField,
++    BooleanField, BoundField, CharField, CheckboxSelectMultiple, ChoiceField, DateField,
+     DateTimeField, EmailField, FileField, FileInput, FloatField, Form,
+     HiddenInput, ImageField, IntegerField, MultipleChoiceField,
+     MultipleHiddenInput, MultiValueField, NullBooleanField, PasswordInput,
+@@ -2078,6 +2078,24 @@ class FormsTestCase(SimpleTestCase):
+         f = SampleForm()
+         self.assertEqual(f['name'], (f, 'name'))
+ 
++    def test_custom_boundfield_data_is_used_for_cleaning_and_changes(self):
++        class UppercaseBoundField(BoundField):
++            @property
++            def data(self):
++                return super().data.upper()
++
++        class CustomField(CharField):
++            def get_bound_field(self, form, name):
++                return UppercaseBoundField(form, self, name)
++
++        class SampleForm(Form):
++            name = CustomField(initial='ALICE')
++
++        form = SampleForm({'name': 'alice'})
++        self.assertTrue(form.is_valid())
++        self.assertEqual(form.cleaned_data, {'name': 'ALICE'})
++        self.assertEqual(form.changed_data, [])
++
+     def test_initial_datetime_values(self):
+         now = datetime.datetime.now()
+         # Nix microseconds (since they should be ignored). #22502

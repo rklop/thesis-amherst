@@ -1,0 +1,47 @@
+diff --git a/tests/generic_views/test_base.py b/tests/generic_views/test_base.py
+--- a/tests/generic_views/test_base.py
++++ b/tests/generic_views/test_base.py
+@@ -3,12 +3,13 @@ import time
+ from django.core.exceptions import ImproperlyConfigured
+ from django.http import HttpResponse
+ from django.test import (
+-    RequestFactory, SimpleTestCase, ignore_warnings, override_settings,
++    RequestFactory, SimpleTestCase, TestCase, ignore_warnings, override_settings,
+ )
+ from django.test.utils import require_jinja2
+ from django.urls import resolve
+ from django.utils.deprecation import RemovedInDjango40Warning
+ from django.views.generic import RedirectView, TemplateView, View
+ 
+ from . import views
++from .models import Author
+ 
+ 
+ class SimpleView(View):
+@@ -569,6 +570,25 @@ class SingleObjectTemplateResponseMixinTest(SimpleTestCase):
+         with self.assertRaisesMessage(ImproperlyConfigured, msg):
+             view.get_template_names()
+ 
+ 
++class TemplateViewDatabaseTests(TestCase):
++    rf = RequestFactory()
++
++    @ignore_warnings(category=RemovedInDjango40Warning)
++    def test_url_kwarg_can_be_filtered_in_render_to_response(self):
++        Author.objects.create(name='Alice', slug='alice')
++
++        class AuthorTemplateView(TemplateView):
++            def render_to_response(self, context, **response_kwargs):
++                author = Author.objects.get(slug=context['author_slug'])
++                return HttpResponse(author.name)
++
++        response = AuthorTemplateView.as_view()(
++            self.rf.get('/authors/alice/'),
++            author_slug='alice',
++        )
++        self.assertEqual(response.content, b'Alice')
++
++
+ @override_settings(ROOT_URLCONF='generic_views.urls')
+ class DeprecationTests(SimpleTestCase):
+     @ignore_warnings(category=RemovedInDjango40Warning)

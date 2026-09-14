@@ -1,0 +1,33 @@
+diff --git a/tests/timezones/tests.py b/tests/timezones/tests.py
+--- a/tests/timezones/tests.py
++++ b/tests/timezones/tests.py
+@@ -503,6 +503,27 @@ class NewDatabaseTests(TestCase):
+         # This is 2011-09-02T01:30:00+03:00 in EAT
+         dt = datetime.datetime(2011, 9, 1, 22, 30, 0, tzinfo=UTC)
+         self.assertFalse(AllDayEvent.objects.filter(day__gte=dt).exists())
+ 
++    @skipIf(connection.vendor != 'sqlite', 'SQLite test')
++    def test_date_lookup_with_same_database_timezone_at_dst_transition(self):
++        database_timezone = 'Europe/Paris'
++        original_timezone = connection.settings_dict['TIME_ZONE']
++        try:
++            connection.settings_dict['TIME_ZONE'] = database_timezone
++            connection.timezone_name
++            del connection.timezone_name
++
++            # This local wall time occurs twice when daylight saving time ends.
++            ambiguous = datetime.datetime(2019, 10, 27, 2, 30)
++            with connection.cursor() as cursor:
++                cursor.execute('INSERT INTO timezones_event (dt) VALUES (%s)', [ambiguous])
++            with timezone.override(database_timezone):
++                self.assertEqual(
++                    Event.objects.filter(dt__date=ambiguous.date()).count(), 1,
++                )
++        finally:
++            connection.settings_dict['TIME_ZONE'] = original_timezone
++            connection.timezone_name
++            del connection.timezone_name
++
+     def test_null_datetime(self):
+         # Regression test for #17294
+         e = MaybeEvent.objects.create()

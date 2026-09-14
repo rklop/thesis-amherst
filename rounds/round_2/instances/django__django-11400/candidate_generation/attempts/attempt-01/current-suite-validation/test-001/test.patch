@@ -1,0 +1,80 @@
+diff --git a/tests/model_fields/models.py b/tests/model_fields/models.py
+--- a/tests/model_fields/models.py
++++ b/tests/model_fields/models.py
+@@ -11,6 +11,7 @@ from django.db.models.fields.files import ImageField, ImageFieldFile
+ from django.db.models.fields.related import (
+     ForeignKey, ForeignObject, ManyToManyField, OneToOneField,
+ )
++from django.db.models.fields.reverse_related import ManyToOneRel
+ from django.utils.translation import gettext_lazy as _
+ 
+ try:
+@@ -32,6 +33,32 @@ class Bar(models.Model):
+     b = models.CharField(max_length=10)
+     a = models.ForeignKey(Foo, models.CASCADE, default=get_foo, related_name='bars')
+ 
+ 
++class FinalizingOrderingRel(ManyToOneRel):
++    def get_related_field(self):
++        related_field = super().get_related_field()
++        self.model._meta.ordering = self.model.finalized_ordering
++        return related_field
++
++
++class FinalizingOrderingForeignKey(ForeignKey):
++    rel_class = FinalizingOrderingRel
++
++
++class OrderingTarget(models.Model):
++    finalized_ordering = ('name',)
++    name = models.CharField(max_length=10)
++
++    class Meta:
++        ordering = ('-name',)
++
++    def __str__(self):
++        return self.name
++
++
++class OrderingReference(models.Model):
++    target = FinalizingOrderingForeignKey(OrderingTarget, models.CASCADE)
++
++
+ class Whiz(models.Model):
+     CHOICES = (
+         ('Group 1', (
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -7,8 +7,8 @@ from django.test import SimpleTestCase, TestCase
+ from django.utils.functional import lazy
+ 
+ from .models import (
+-    Bar, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,
+-    WhizIter, WhizIterEmpty,
++    Bar, Choiceful, Foo, OrderingReference, OrderingTarget, RenamedField,
++    VerboseNameField, Whiz, WhizDelayed, WhizIter, WhizIterEmpty,
+ )
+ 
+ 
+@@ -239,6 +239,20 @@ class GetChoicesOrderingTests(TestCase):
+             [self.foo2, self.foo1]
+         )
+ 
++    def test_get_choices_uses_finalized_related_ordering(self):
++        """
++        Resolving the relation may finalize model metadata. Default choices
++        should use the related model's resulting default ordering.
++        """
++        original_ordering = OrderingTarget._meta.ordering
++        self.addCleanup(setattr, OrderingTarget._meta, 'ordering', original_ordering)
++        OrderingTarget._meta.ordering = ('-name',)
++        OrderingTarget.objects.create(name='zulu')
++        OrderingTarget.objects.create(name='alpha')
++        field = OrderingReference._meta.get_field('target')
++        choices = field.get_choices(include_blank=False)
++        self.assertChoicesEqual(choices, list(OrderingTarget.objects.all()))
++
+     def test_get_choices_reverse_related_field(self):
+         self.assertChoicesEqual(
+             self.field.remote_field.get_choices(include_blank=False, ordering=('a',)),

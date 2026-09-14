@@ -1,0 +1,10 @@
+{
+  "test_name": "test_Mul_nested_reciprocal_pow_subclass",
+  "specification_gap": "Nested reciprocal grouping must follow concrete Pow semantics for Pow subclasses, even when a subclass customizes the structural is_Pow classification flag.",
+  "input_description": "Create an unevaluated expression x*(p**-1), where p is a Pow subclass instance representing y**-1 and sets is_Pow=False, then render it with str().",
+  "expected_output": "The string must be `x/(1/y)`, preserving the inner reciprocal as a single denominator. Without grouping, `x/1/y` represents a different division structure.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises subtype polymorphism at the exact nested-denominator boundary. Candidate_a recognizes the concrete Pow subtype and adds parentheses; candidate_b additionally gates on the overridable is_Pow flag and therefore omits them.",
+  "test_patch": "diff --git a/sympy/printing/tests/test_str.py b/sympy/printing/tests/test_str.py\n--- a/sympy/printing/tests/test_str.py\n+++ b/sympy/printing/tests/test_str.py\n@@ -267,6 +267,15 @@ def test_Mul():\n     assert str(cc2*Rational(2)) == '2*CustomClass2()'\n     assert str(cc2*Rational(2)*cc1) == '2*CustomClass1()*CustomClass2()'\n     assert str(cc1*Rational(2)*cc2) == '2*CustomClass1()*CustomClass2()'\n \n \n+def test_Mul_nested_reciprocal_pow_subclass():\n+    class CustomPow(Pow):\n+        is_Pow = False\n+\n+    inner = CustomPow(y, -1, evaluate=False)\n+    expr = Mul(x, Pow(inner, -1, evaluate=False), evaluate=False)\n+    assert str(expr) == 'x/(1/y)'\n+\n+\n def test_NaN():\n     assert str(nan) == \"nan\"\n",
+  "test_command": "python -m pytest -q sympy/printing/tests/test_str.py::test_Mul_nested_reciprocal_pow_subclass"
+}

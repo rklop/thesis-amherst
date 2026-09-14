@@ -1,0 +1,10 @@
+{
+  "test_name": "test_sum_min_count_multiple_dims_scalar_timedelta",
+  "specification_gap": "When summing over multiple dimensions produces a scalar, min_count must still yield a missing result if too few non-missing values are present, including for timedelta data.",
+  "input_description": "A 2\u00d72 timedelta DataArray containing one valid one-day duration and three NaT values, summed over both named dimensions with skipna=True and min_count=2.",
+  "expected_output": "A zero-dimensional DataArray with a missing value because only one valid element is available. candidate_b handles the scalar multi-axis validity check; candidate_a retains the non-missing timedelta sum.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This covers the zero-dimensional boundary of multi-axis reduction, where candidate_a's new logic is bypassed due to the scalar result and its older dtype-sensitive fallback does not enforce min_count for timedelta output.",
+  "test_patch": "diff --git a/xarray/tests/test_min_count_multidim.py b/xarray/tests/test_min_count_multidim.py\nnew file mode 100644\n--- /dev/null\n+++ b/xarray/tests/test_min_count_multidim.py\n@@ -0,0 +1,14 @@\n+import numpy as np\n+\n+from xarray import DataArray\n+\n+\n+def test_sum_min_count_multiple_dims_scalar_timedelta():\n+    data = np.array(\n+        [[\"1\", \"NaT\"], [\"NaT\", \"NaT\"]], dtype=\"timedelta64[D]\"\n+    )\n+    array = DataArray(data, dims=(\"x\", \"y\"))\n+\n+    actual = array.sum((\"x\", \"y\"), skipna=True, min_count=2)\n+\n+    assert actual.isnull().values.item()\n",
+  "test_command": "cd /testbed && pytest -q xarray/tests/test_min_count_multidim.py"
+}

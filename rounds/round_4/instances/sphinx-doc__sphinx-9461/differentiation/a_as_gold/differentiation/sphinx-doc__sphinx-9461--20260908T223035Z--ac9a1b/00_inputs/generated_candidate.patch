@@ -1,0 +1,159 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..81dcd2626 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -852,6 +852,7 @@ class PyProperty(PyObject):
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
+         'abstractmethod': directives.flag,
++        'classmethod': directives.flag,
+         'type': directives.unchanged,
+     })
+ 
+@@ -865,9 +866,12 @@ class PyProperty(PyObject):
+         return fullname, prefix
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+-        prefix = ['property']
++        prefix = []
+         if 'abstractmethod' in self.options:
+-            prefix.insert(0, 'abstract')
++            prefix.append('abstract')
++        if 'classmethod' in self.options:
++            prefix.append('class')
++        prefix.append('property')
+ 
+         return ' '.join(prefix) + ' '
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..a31435643 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1957,6 +1957,19 @@ class DataDocumenter(GenericAliasMixin, NewTypeMixin, TypeVarMixin,
+ 
+     def import_object(self, raiseerror: bool = False) -> bool:
+         ret = super().import_object(raiseerror)
++        
++        # For classmethod-wrapped properties (Python 3.9+), we need to get the
++        # descriptor from __dict__ to get proper docstring
++        if self.parent and self.object_name:
++            obj_dict = self.get_attr(self.parent, '__dict__', {})
++            if self.object_name in obj_dict:
++                obj = obj_dict[self.object_name]
++                if isinstance(obj, classmethod):
++                    # Call the attrgetter to record the lookup (for tracking purposes)
++                    self.get_attr(self.parent, self.object_name)
++                    # Get the descriptor from __dict__ for documentation
++                    self.object = obj
++        
+         if self.parent:
+             self.update_annotations(self.parent)
+ 
+@@ -2663,6 +2676,31 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+                             ) -> bool:
+         return inspect.isproperty(member) and isinstance(parent, ClassDocumenter)
+ 
++    def import_object(self, raiseerror: bool = False) -> bool:
++        """Import the object.
++        
++        For classmethod-wrapped properties (Python 3.9+), we need to get the
++        descriptor from the class __dict__ instead of using getattr, which
++        would evaluate the property.
++        """
++        # Try the normal import first
++        ret = super().import_object(raiseerror)
++        
++        # After the import, check if the object in __dict__ is a classmethod wrapping a property
++        # The getattr call will evaluate the property and return its value, so we need to
++        # check __dict__ to get the actual descriptor
++        if self.parent and self.object_name:
++            obj_dict = self.get_attr(self.parent, '__dict__', {})
++            if self.object_name in obj_dict:
++                obj = obj_dict[self.object_name]
++                if isinstance(obj, classmethod):
++                    # Call the attrgetter to record the lookup (for tracking purposes)
++                    self.get_attr(self.parent, self.object_name)
++                    # Get the descriptor from __dict__ for documentation
++                    self.object = obj
++        
++        return ret
++
+     def document_members(self, all_members: bool = False) -> None:
+         pass
+ 
+@@ -2673,6 +2711,13 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+     def add_directive_header(self, sig: str) -> None:
+         super().add_directive_header(sig)
+         sourcename = self.get_sourcename()
++        
++        # Check if this is a classmethod-wrapped property (Python 3.9+)
++        if isinstance(self.object, classmethod):
++            self.add_line('   :classmethod:', sourcename)
++            # Unwrap to get the actual property
++            self.object = self.object.__func__
++        
+         if inspect.isabstractmethod(self.object):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..3e2cf8326 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -274,12 +274,18 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable
+     # other members
+     for name in dir(subject):
+         try:
+-            value = attrgetter(subject, name)
+-            if ismock(value):
+-                value = undecorate(value)
+-
+             unmangled = unmangle(subject, name)
+             if unmangled and unmangled not in members:
++                if name in obj_dict:
++                    # Use the descriptor from __dict__ directly to avoid
++                    # evaluating properties (important for classmethod-wrapped properties)
++                    value = obj_dict[name]
++                else:
++                    value = attrgetter(subject, name)
++                
++                if ismock(value):
++                    value = undecorate(value)
++
+                 if name in obj_dict:
+                     members[unmangled] = ObjectMember(unmangled, value, class_=subject)
+                 else:
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 23dd9e930..e8d095c49 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -390,6 +390,12 @@ def isproperty(obj: Any) -> bool:
+         if isinstance(obj, cached_property):
+             return True
+ 
++    if isinstance(obj, classmethod):
++        # Check if the classmethod wraps a property (Python 3.9+)
++        obj = obj.__func__
++        if isinstance(obj, property):
++            return True
++
+     return isinstance(obj, property)
+ 
+ 
+@@ -836,8 +842,17 @@ def getdoc(obj: Any, attrgetter: Callable = safe_getattr,
+     * partial functions
+     * inherited docstring
+     * inherited decorated methods
++    * classmethod-wrapped properties (Python 3.9+)
+     """
+     doc = attrgetter(obj, '__doc__', None)
++    
++    # Handle classmethod-wrapped properties (Python 3.9+)
++    if isinstance(obj, classmethod) and hasattr(obj, '__func__'):
++        # Get the wrapped property's docstring
++        inner = obj.__func__
++        if isinstance(inner, property) and inner.fget:
++            doc = attrgetter(inner.fget, '__doc__', None)
++    
+     if ispartial(obj) and doc == obj.__class__.__doc__:
+         return getdoc(obj.func)
+     elif doc is None and allow_inherited:

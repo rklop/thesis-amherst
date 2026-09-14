@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "4395fa163e633b97534ffc76878eb5075aaf3ba8b01e48af365d13512170320e",
+    "test_sha256": "28d24b96546eeff23cb136c443beebd5f42b6a8f922d53a40e0771db19d54367",
+    "test": {
+      "test_id": "django__django-11400--28d24b96546eeff2",
+      "test_name": "test_get_choices_model_ordering_uses_resolved_related_model",
+      "specification_gap": "Fallback ordering must come from the same resolved related model whose objects populate the choices. candidate_a performs a second target-model lookup, while candidate_b consistently reuses the initially resolved model.",
+      "expected_output": "Choices contain foo2 followed by foo1, matching descending Foo.a ordering. candidate_a instead applies the later ascending ordering and returns the opposite order.",
+      "test_patch": "diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py\n--- a/tests/model_fields/tests.py\n+++ b/tests/model_fields/tests.py\n@@ -231,6 +231,38 @@ class GetChoicesOrderingTests(TestCase):\n     def assertChoicesEqual(self, choices, objs):\n         self.assertEqual(choices, [(obj.pk, str(obj)) for obj in objs])\n \n+    def test_get_choices_model_ordering_uses_resolved_related_model(self):\n+        \"\"\"Fallback ordering comes from the model supplying the choices.\"\"\"\n+        class ResolvingRemoteField:\n+            def __init__(self, remote_field):\n+                self.remote_field = remote_field\n+                self.model_accesses = 0\n+\n+            def __getattr__(self, name):\n+                return getattr(self.remote_field, name)\n+\n+            @property\n+            def model(self):\n+                self.model_accesses += 1\n+                return Foo if self.model_accesses == 1 else Bar\n+\n+        remote_field = self.field.remote_field\n+        foo_ordering = Foo._meta.ordering\n+        bar_ordering = Bar._meta.ordering\n+        self.field.remote_field = ResolvingRemoteField(remote_field)\n+        Foo._meta.ordering = ('-a',)\n+        Bar._meta.ordering = ('a',)\n+        try:\n+            choices = self.field.get_choices(include_blank=False)\n+        finally:\n+            self.field.remote_field = remote_field\n+            Foo._meta.ordering = foo_ordering\n+            Bar._meta.ordering = bar_ordering\n+        self.assertChoicesEqual(\n+            choices,\n+            [self.foo2, self.foo1]\n+        )\n+\n     def test_get_choices(self):\n         self.assertChoicesEqual(\n             self.field.get_choices(include_blank=False, ordering=('a',)),\n",
+      "test_command": "cd /testbed && ./tests/runtests.py model_fields.tests.GetChoicesOrderingTests.test_get_choices_model_ordering_uses_resolved_related_model",
+      "test_patch_sha256": "28d24b96546eeff23cb136c443beebd5f42b6a8f922d53a40e0771db19d54367",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.575,
+    "log_path": "test-002/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-11400--28d24b96546eeff2",
+  "polarity": "must_pass"
+}

@@ -1,0 +1,10 @@
+{
+  "test_name": "test_sum_min_count_multiple_dims_with_units",
+  "specification_gap": "A multi-dimension min_count reduction must apply the validity threshold independently to each remaining output element, including for supported non-NumPy duck arrays.",
+  "input_description": "A Pint-backed 2\u00d72\u00d72 DataArray in meters, with one NaN in each z slice, is summed over x and y using skipna=True and min_count=3. Each z slice has exactly three valid values.",
+  "expected_output": "A meter-valued DataArray over z with magnitudes [9.0, 14.0].",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "Candidate_a retains generic array handling for the vector validity mask. Candidate_b treats every non-NumPy, non-Dask result as scalar, so the two-element Pint reduction mask is incorrectly evaluated as one Boolean.",
+  "test_patch": "diff --git a/xarray/tests/test_units.py b/xarray/tests/test_units.py\n--- a/xarray/tests/test_units.py\n+++ b/xarray/tests/test_units.py\n@@ -1489,7 +1489,23 @@ def test_dot_dataarray(dtype):\n     actual = xr.dot(data_array, other)\n \n     assert_units_equal(expected, actual)\n     assert_identical(expected, actual)\n \n \n+def test_sum_min_count_multiple_dims_with_units():\n+    data = np.array(\n+        [\n+            [[1.0, 2.0], [3.0, 4.0]],\n+            [[5.0, np.nan], [np.nan, 8.0]],\n+        ]\n+    ) * unit_registry.m\n+    array = xr.DataArray(data, dims=(\"x\", \"y\", \"z\"))\n+\n+    actual = array.sum(dim=(\"x\", \"y\"), skipna=True, min_count=3)\n+    expected = xr.DataArray(np.array([9.0, 14.0]) * unit_registry.m, dims=\"z\")\n+\n+    assert_units_equal(expected, actual)\n+    assert_allclose(expected, actual)\n+\n+\n class TestVariable:\n     @pytest.mark.parametrize(\n         \"func\",\n",
+  "test_command": "cd /testbed && pytest -q xarray/tests/test_units.py::test_sum_min_count_multiple_dims_with_units"
+}

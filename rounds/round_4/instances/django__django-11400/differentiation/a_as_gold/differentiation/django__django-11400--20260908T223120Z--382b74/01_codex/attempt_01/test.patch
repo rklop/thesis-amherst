@@ -1,0 +1,69 @@
+diff --git a/tests/model_fields/models.py b/tests/model_fields/models.py
+--- a/tests/model_fields/models.py
++++ b/tests/model_fields/models.py
+@@ -25,6 +25,24 @@ class Foo(models.Model):
+     d = models.DecimalField(max_digits=5, decimal_places=3)
+ 
+ 
++class MetaOrderedChoiceManager(models.Manager):
++    def get_queryset(self):
++        return super().get_queryset().order_by('-name')
++
++
++class MetaOrderedChoice(models.Model):
++    name = models.CharField(max_length=10)
++    objects = MetaOrderedChoiceManager()
++
++    class Meta:
++        ordering = ('name',)
++
++    def __str__(self):
++        return self.name
++
++
++class MetaOrderedChoiceReference(models.Model):
++    choice = models.ForeignKey(MetaOrderedChoice, models.CASCADE)
++
++
+ def get_foo():
+     return Foo.objects.get(id=1).pk
+ 
+ diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -7,8 +7,8 @@ from django.test import SimpleTestCase, TestCase
+ from django.utils.functional import lazy
+ 
+ from .models import (
+-    Bar, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,
+-    WhizIter, WhizIterEmpty,
++    Bar, Choiceful, Foo, MetaOrderedChoice, MetaOrderedChoiceReference,
++    RenamedField, VerboseNameField, Whiz, WhizDelayed, WhizIter, WhizIterEmpty,
+ )
+ 
+ 
+@@ -227,6 +227,10 @@ class GetChoicesOrderingTests(TestCase):
+         cls.bar1 = Bar.objects.create(a=cls.foo1, b='a')
+         cls.bar2 = Bar.objects.create(a=cls.foo2, b='a')
+         cls.field = Bar._meta.get_field('a')
++        cls.choice_z = MetaOrderedChoice.objects.create(name='z')
++        cls.choice_a = MetaOrderedChoice.objects.create(name='a')
++        cls.meta_ordered_field = (
++            MetaOrderedChoiceReference._meta.get_field('choice'))
+ 
+     def assertChoicesEqual(self, choices, objs):
+         self.assertEqual(choices, [(obj.pk, str(obj)) for obj in objs])
+@@ -241,6 +245,12 @@ class GetChoicesOrderingTests(TestCase):
+             [self.foo2, self.foo1]
+         )
+ 
++    def test_get_choices_empty_ordering_uses_meta_ordering(self):
++        self.assertChoicesEqual(
++            self.meta_ordered_field.get_choices(
++                include_blank=False, ordering=()),
++            [self.choice_a, self.choice_z],
++        )
++
+     def test_get_choices_reverse_related_field(self):
+         self.assertChoicesEqual(
+             self.field.remote_field.get_choices(include_blank=False, ordering=('a',)),

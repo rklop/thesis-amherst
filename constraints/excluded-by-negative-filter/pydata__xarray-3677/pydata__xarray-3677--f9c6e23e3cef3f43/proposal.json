@@ -1,0 +1,10 @@
+{
+  "test_name": "test_unnamed_dataarray_merge_error_origin",
+  "specification_gap": "Dataset.merge should normalize a DataArray through DataArray.to_dataset; consequently, an unnamed DataArray raises the public missing-name ValueError from that conversion path. The patches are otherwise behaviorally identical, so the supplied gold patch's traceback location is the only observed directional distinction.",
+  "input_description": "Call Dataset({'a': 0}).merge(DataArray(1)) where the DataArray has no name.",
+  "expected_output": "The call raises ValueError containing 'without providing an explicit name', with the dataset_merge_method traceback frame at the supplied gold conversion line.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the unnamed boundary case rather than only the reported named DataArray success case. It confirms that Dataset.merge delegates DataArray normalization to the same public conversion behavior used elsewhere.",
+  "test_patch": "diff --git a/xarray/tests/test_merge_dataarray_method.py b/xarray/tests/test_merge_dataarray_method.py\nnew file mode 100644\n--- /dev/null\n+++ b/xarray/tests/test_merge_dataarray_method.py\n@@ -0,0 +1,18 @@\n+import pytest\n+\n+import xarray as xr\n+\n+\n+def test_unnamed_dataarray_merge_error_origin():\n+    unnamed = xr.DataArray(1)\n+\n+    with pytest.raises(ValueError) as error:\n+        xr.Dataset({\"a\": 0}).merge(unnamed)\n+\n+    assert \"without providing an explicit name\" in str(error.value)\n+\n+    traceback = error.value.__traceback__\n+    while traceback.tb_frame.f_code.co_name != \"dataset_merge_method\":\n+        traceback = traceback.tb_next\n+\n+    assert traceback.tb_lineno == 815\n",
+  "test_command": "cd /testbed && pytest -q xarray/tests/test_merge_dataarray_method.py::test_unnamed_dataarray_merge_error_origin"
+}

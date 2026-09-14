@@ -1,0 +1,10 @@
+{
+  "test_name": "test_repeated_kfold_invalid_repeats_do_not_set_n_splits",
+  "specification_gap": "RepeatedKFold must validate n_repeats before publishing constructor parameters. When initialization is rejected, n_splits should not remain as partially initialized public state.",
+  "input_description": "Preallocate a RepeatedKFold instance, then invoke its initializer with n_splits=3 and invalid n_repeats=0 while retaining the instance after the expected exception.",
+  "expected_output": "Initialization raises ValueError, and the rejected instance has no n_splits attribute.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "Both patches produce the requested repr after successful ordinary construction, but they disagree at the validation boundary. The gold patch preserves the existing validation-before-mutation invariant; candidate_a exposes n_splits before n_repeats is accepted.",
+  "test_patch": "diff --git a/sklearn/model_selection/tests/test_split.py b/sklearn/model_selection/tests/test_split.py\n--- a/sklearn/model_selection/tests/test_split.py\n+++ b/sklearn/model_selection/tests/test_split.py\n@@ -978,6 +978,13 @@ def test_repeated_cv_value_errors():\n     for cv in (RepeatedKFold, RepeatedStratifiedKFold):\n         assert_raises(ValueError, cv, n_repeats=0)\n         assert_raises(ValueError, cv, n_repeats=1.5)\n \n \n+def test_repeated_kfold_invalid_repeats_do_not_set_n_splits():\n+    rkf = RepeatedKFold.__new__(RepeatedKFold)\n+    with pytest.raises(ValueError, match=\"greater than 0\"):\n+        rkf.__init__(n_splits=3, n_repeats=0)\n+    assert not hasattr(rkf, 'n_splits')\n+\n+\n def test_repeated_kfold_determinstic_split():\n     X = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]\n     random_state = 258173307\n",
+  "test_command": "python -m pytest -q sklearn/model_selection/tests/test_split.py::test_repeated_kfold_invalid_repeats_do_not_set_n_splits"
+}

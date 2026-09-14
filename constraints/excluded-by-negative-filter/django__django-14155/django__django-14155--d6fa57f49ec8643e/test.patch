@@ -1,0 +1,35 @@
+diff --git a/tests/urlpatterns_reverse/tests.py b/tests/urlpatterns_reverse/tests.py
+--- a/tests/urlpatterns_reverse/tests.py
++++ b/tests/urlpatterns_reverse/tests.py
+@@ -3,6 +3,7 @@ Unit tests for reverse URL lookups.
+ """
+ import sys
+ import threading
++from functools import partial, update_wrapper
+ 
+ from admin_scripts.tests import AdminScriptTestCase
+ 
+@@ -1105,6 +1106,23 @@ class NoRootUrlConfTests(SimpleTestCase):
+ @override_settings(ROOT_URLCONF='urlpatterns_reverse.namespace_urls')
+ class ResolverMatchTests(SimpleTestCase):
+ 
++    def test_wrapped_partial_view_name(self):
++        def public_view(request, marker=None):
++            pass
++
++        def dispatch(view, request, marker=None):
++            return view(request, marker)
++
++        decorated_view = update_wrapper(
++            partial(dispatch, public_view), public_view,
++        )
++        configured_view = partial(decorated_view, marker='configured')
++        match = ResolverMatch(configured_view, (), {})
++        self.assertEqual(
++            match.view_name,
++            '%s.%s' % (public_view.__module__, public_view.__name__),
++        )
++
+     def test_urlpattern_resolve(self):
+         for path_, url_name, app_name, namespace, view_name, func, args, kwargs in resolve_test_data:
+             with self.subTest(path=path_):

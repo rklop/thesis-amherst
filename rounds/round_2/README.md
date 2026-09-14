@@ -1,0 +1,86 @@
+# Round 2
+
+This round generates candidate patches against the accumulated suite, validates them, searches both candidate directions for separating tests, and checks those tests against the actual gold patch.
+
+Instances with evidence in this round: **64**.
+
+## Terminal outcomes recorded in this round
+
+- `gold_gate_execution_failure`: 3
+- `identical`: 6
+- `other_pair_generation_exhausted`: 2
+- `saturated`: 4
+- `zero_passing_patches`: 7
+
+## Contents
+
+- `instances/`: one folder per instance, combining generation and differentiation evidence.
+- `summary/`: round-wide state, counts, launch metadata, and logs.
+- `input_suite/`: the accumulated oracle-augmented test suite used for candidate validation in this round.
+
+## Instances
+
+- [`django__django-11138`](instances/django__django-11138/)
+- [`django__django-11163`](instances/django__django-11163/)
+- [`django__django-11239`](instances/django__django-11239/)
+- [`django__django-11265`](instances/django__django-11265/)
+- [`django__django-11400`](instances/django__django-11400/)
+- [`django__django-11815`](instances/django__django-11815/)
+- [`django__django-11848`](instances/django__django-11848/)
+- [`django__django-11964`](instances/django__django-11964/)
+- [`django__django-13212`](instances/django__django-13212/)
+- [`django__django-13297`](instances/django__django-13297/)
+- [`django__django-13512`](instances/django__django-13512/)
+- [`django__django-13837`](instances/django__django-13837/)
+- [`django__django-14155`](instances/django__django-14155/)
+- [`django__django-14170`](instances/django__django-14170/)
+- [`django__django-14376`](instances/django__django-14376/)
+- [`django__django-14631`](instances/django__django-14631/)
+- [`django__django-15098`](instances/django__django-15098/)
+- [`django__django-15127`](instances/django__django-15127/)
+- [`django__django-15128`](instances/django__django-15128/)
+- [`django__django-15268`](instances/django__django-15268/)
+- [`django__django-15741`](instances/django__django-15741/)
+- [`django__django-15987`](instances/django__django-15987/)
+- [`django__django-16100`](instances/django__django-16100/)
+- [`django__django-16454`](instances/django__django-16454/)
+- [`django__django-16612`](instances/django__django-16612/)
+- [`django__django-16661`](instances/django__django-16661/)
+- [`matplotlib__matplotlib-14623`](instances/matplotlib__matplotlib-14623/)
+- [`matplotlib__matplotlib-22719`](instances/matplotlib__matplotlib-22719/)
+- [`matplotlib__matplotlib-22871`](instances/matplotlib__matplotlib-22871/)
+- [`matplotlib__matplotlib-24026`](instances/matplotlib__matplotlib-24026/)
+- [`matplotlib__matplotlib-24627`](instances/matplotlib__matplotlib-24627/)
+- [`matplotlib__matplotlib-25311`](instances/matplotlib__matplotlib-25311/)
+- [`matplotlib__matplotlib-25479`](instances/matplotlib__matplotlib-25479/)
+- [`matplotlib__matplotlib-26466`](instances/matplotlib__matplotlib-26466/)
+- [`psf__requests-1142`](instances/psf__requests-1142/)
+- [`pydata__xarray-3677`](instances/pydata__xarray-3677/)
+- [`pydata__xarray-4356`](instances/pydata__xarray-4356/)
+- [`pydata__xarray-6744`](instances/pydata__xarray-6744/)
+- [`pydata__xarray-7229`](instances/pydata__xarray-7229/)
+- [`pylint-dev__pylint-6386`](instances/pylint-dev__pylint-6386/)
+- [`pylint-dev__pylint-8898`](instances/pylint-dev__pylint-8898/)
+- [`pytest-dev__pytest-7205`](instances/pytest-dev__pytest-7205/)
+- [`scikit-learn__scikit-learn-10297`](instances/scikit-learn__scikit-learn-10297/)
+- [`scikit-learn__scikit-learn-13135`](instances/scikit-learn__scikit-learn-13135/)
+- [`scikit-learn__scikit-learn-13496`](instances/scikit-learn__scikit-learn-13496/)
+- [`scikit-learn__scikit-learn-14983`](instances/scikit-learn__scikit-learn-14983/)
+- [`sphinx-doc__sphinx-10466`](instances/sphinx-doc__sphinx-10466/)
+- [`sphinx-doc__sphinx-11445`](instances/sphinx-doc__sphinx-11445/)
+- [`sphinx-doc__sphinx-7462`](instances/sphinx-doc__sphinx-7462/)
+- [`sphinx-doc__sphinx-7985`](instances/sphinx-doc__sphinx-7985/)
+- [`sphinx-doc__sphinx-9230`](instances/sphinx-doc__sphinx-9230/)
+- [`sphinx-doc__sphinx-9258`](instances/sphinx-doc__sphinx-9258/)
+- [`sphinx-doc__sphinx-9281`](instances/sphinx-doc__sphinx-9281/)
+- [`sphinx-doc__sphinx-9461`](instances/sphinx-doc__sphinx-9461/)
+- [`sympy__sympy-12096`](instances/sympy__sympy-12096/)
+- [`sympy__sympy-13757`](instances/sympy__sympy-13757/)
+- [`sympy__sympy-15599`](instances/sympy__sympy-15599/)
+- [`sympy__sympy-18199`](instances/sympy__sympy-18199/)
+- [`sympy__sympy-21596`](instances/sympy__sympy-21596/)
+- [`sympy__sympy-21612`](instances/sympy__sympy-21612/)
+- [`sympy__sympy-21930`](instances/sympy__sympy-21930/)
+- [`sympy__sympy-22456`](instances/sympy__sympy-22456/)
+- [`sympy__sympy-23413`](instances/sympy__sympy-23413/)
+- [`sympy__sympy-24066`](instances/sympy__sympy-24066/)

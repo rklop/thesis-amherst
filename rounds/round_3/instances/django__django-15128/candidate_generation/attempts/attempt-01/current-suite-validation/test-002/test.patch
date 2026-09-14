@@ -1,0 +1,41 @@
+diff --git a/tests/queries/tests.py b/tests/queries/tests.py
+--- a/tests/queries/tests.py
++++ b/tests/queries/tests.py
+@@ -8,7 +8,9 @@ from django.core.exceptions import EmptyResultSet, FieldError
+ from django.db import DEFAULT_DB_ALIAS, connection
+ from django.db.models import Count, Exists, F, Max, OuterRef, Q
+ from django.db.models.expressions import RawSQL
++from django.db.models.query import QuerySet
+ from django.db.models.sql.constants import LOUTER
++from django.db.models.sql.query import Query
+ from django.db.models.sql.where import NothingNode, WhereNode
+ from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+ from django.test.utils import CaptureQueriesContext
+@@ -2097,6 +2099,27 @@ class QuerySetBitwiseOperationTests(TestCase):
+         cls.room_3 = Classroom.objects.create(school=cls.school, has_blackboard=True, name='Room 3')
+         cls.room_4 = Classroom.objects.create(school=cls.school, has_blackboard=False, name='Room 4')
+ 
++    def test_or_with_custom_query_join_override(self):
++        class JoinOverrideQuery(Query):
++            def join(self, join, reuse=None):
++                return super().join(join, reuse=reuse)
++
++        student = Student.objects.create(school=self.school)
++        self.room_1.students.add(student)
++        queryset = QuerySet(
++            model=Classroom,
++            query=JoinOverrideQuery(Classroom),
++        )
++        lhs = queryset.filter(students=student)
++        rhs = queryset.filter(
++            school__classroom__school__classroom__name='Room 2',
++        )
++
++        self.assertCountEqual(
++            (lhs | rhs).distinct(),
++            [self.room_1, self.room_2, self.room_3, self.room_4],
++        )
++
+     @skipUnlessDBFeature('allow_sliced_subqueries_with_in')
+     def test_or_with_rhs_slice(self):
+         qs1 = Classroom.objects.filter(has_blackboard=True)

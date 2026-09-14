@@ -1,0 +1,58 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index 9b00e24509..4324275877 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -45,12 +45,30 @@ class ResolverMatch:
+         self.namespaces = [x for x in namespaces if x] if namespaces else []
+         self.namespace = ':'.join(self.namespaces)
+ 
++        # Unwrap functools.partial objects to get the underlying function.
++        self._partial_args = ()
++        self._partial_kwargs = {}
++        self._is_partial = False
++        while isinstance(func, functools.partial):
++            self._is_partial = True
++            self._partial_args = func.args + self._partial_args
++            self._partial_kwargs = {**func.keywords, **self._partial_kwargs}
++            func = func.func
++
+         if not hasattr(func, '__name__'):
+-            # A class-based view
+-            self._func_path = func.__class__.__module__ + '.' + func.__class__.__name__
++            # A class-based view or callable object
++            # Check if the callable has a custom __repr__ that's more informative
++            if callable(func) and repr(func) != object.__repr__(func):
++                self._func_path = repr(func)
++            else:
++                self._func_path = func.__class__.__module__ + '.' + func.__class__.__name__
+         else:
+             # A function-based view
+-            self._func_path = func.__module__ + '.' + func.__name__
++            # For partials, use repr to get <function name at address>
++            if self._is_partial:
++                self._func_path = repr(func)
++            else:
++                self._func_path = func.__module__ + '.' + func.__name__
+ 
+         view_path = url_name or self._func_path
+         self.view_name = ':'.join(self.namespaces + [view_path])
+@@ -59,8 +77,18 @@ class ResolverMatch:
+         return (self.func, self.args, self.kwargs)[index]
+ 
+     def __repr__(self):
++        if self._partial_args or self._partial_kwargs:
++            func_repr = 'functools.partial(%s, %s)' % (
++                self._func_path,
++                ', '.join([
++                    *self._partial_args,
++                    *['%s=%r' % (k, v) for k, v in self._partial_kwargs.items()]
++                ])
++            )
++        else:
++            func_repr = self._func_path
+         return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%s, app_names=%s, namespaces=%s, route=%s)" % (
+-            self._func_path, self.args, self.kwargs, self.url_name,
++            func_repr, self.args, self.kwargs, self.url_name,
+             self.app_names, self.namespaces, self.route,
+         )
+ 

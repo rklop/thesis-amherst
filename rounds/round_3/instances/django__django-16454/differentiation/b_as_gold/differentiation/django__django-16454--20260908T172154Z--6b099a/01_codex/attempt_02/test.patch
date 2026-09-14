@@ -1,0 +1,39 @@
+diff --git a/tests/user_commands/tests.py b/tests/user_commands/tests.py
+--- a/tests/user_commands/tests.py
++++ b/tests/user_commands/tests.py
+@@ -8,7 +8,8 @@ from admin_scripts.tests import AdminScriptTestCase
+ from django.apps import apps
+ from django.core import management
+ from django.core.checks import Tags
+ from django.core.management import BaseCommand, CommandError, find_commands
++from django.core.management.base import CommandParser
+ from django.core.management.utils import (
+     find_command,
+     get_random_secret_key,
+@@ -417,7 +418,26 @@ class CommandTests(SimpleTestCase):
+         )
+         self.assertEqual(parser.epilog, epilog)
+         self.assertEqual(parser.formatter_class, ArgumentDefaultsHelpFormatter)
+ 
++    def test_subparser_custom_parser_class_default(self):
++        class CustomCommandParser(CommandParser):
++            def __init__(
++                self, *, called_from_command_line=True, **kwargs
++            ):
++                super().__init__(
++                    called_from_command_line=called_from_command_line, **kwargs
++                )
++
++        parser = CommandParser()
++        subparsers = parser.add_subparsers(parser_class=CustomCommandParser)
++        subparser = subparsers.add_parser("subcommand")
++        subparser.add_argument("name")
++
++        with captured_stderr() as stderr:
++            with self.assertRaises(SystemExit):
++                subparser.parse_args([])
++        self.assertIn("the following arguments are required: name", stderr.getvalue())
++
+     def test_outputwrapper_flush(self):
+         out = StringIO()
+         with mock.patch.object(out, "flush") as mocked_flush:

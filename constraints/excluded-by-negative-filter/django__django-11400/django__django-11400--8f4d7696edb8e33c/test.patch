@@ -1,0 +1,85 @@
+diff --git a/tests/model_fields/models.py b/tests/model_fields/models.py
+--- a/tests/model_fields/models.py
++++ b/tests/model_fields/models.py
+@@ -33,7 +33,40 @@ class Bar(models.Model):
+     b = models.CharField(max_length=10)
+     a = models.ForeignKey(Foo, models.CASCADE, default=get_foo, related_name='bars')
+ 
+ 
++class OrderingChangingField(models.CharField):
++    change_ordering_on_access = False
++
++    @property
++    def attname(self):
++        if self.change_ordering_on_access and hasattr(self, 'model'):
++            self.model._meta.ordering = ('-label',)
++        return self._attname
++
++    @attname.setter
++    def attname(self, value):
++        self._attname = value
++
++
++class MetaOrderedChoice(models.Model):
++    code = OrderingChangingField(max_length=10, primary_key=True)
++    label = models.CharField(max_length=10)
++
++    class Meta:
++        ordering = ('label',)
++
++    def __str__(self):
++        return self.label
++
++
++class MetaOrderedChoiceReference(models.Model):
++    choice = models.ForeignKey(
++        MetaOrderedChoice,
++        models.CASCADE,
++        to_field='code',
++    )
++
++
+ class Whiz(models.Model):
+     CHOICES = (
+         ('Group 1', (
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -7,8 +7,8 @@ from django.test import SimpleTestCase, TestCase
+ from django.utils.functional import lazy
+ 
+ from .models import (
+-    Bar, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,
+-    WhizIter, WhizIterEmpty,
++    Bar, Choiceful, Foo, MetaOrderedChoice, MetaOrderedChoiceReference,
++    RenamedField, VerboseNameField, Whiz, WhizDelayed, WhizIter, WhizIterEmpty,
+ )
+ 
+ 
+@@ -241,6 +241,26 @@ class GetChoicesOrderingTests(TestCase):
+             [self.foo2, self.foo1]
+         )
+ 
++    def test_get_choices_preserves_meta_ordering_during_relation_resolution(self):
++        MetaOrderedChoice.objects.create(code='z', label='Zulu')
++        MetaOrderedChoice.objects.create(code='a', label='Alpha')
++        target_field = MetaOrderedChoice._meta.get_field('code')
++        original_ordering = MetaOrderedChoice._meta.ordering
++        self.addCleanup(
++            setattr, MetaOrderedChoice._meta, 'ordering', original_ordering,
++        )
++        self.addCleanup(
++            setattr, target_field, 'change_ordering_on_access', False,
++        )
++        target_field.change_ordering_on_access = True
++
++        field = MetaOrderedChoiceReference._meta.get_field('choice')
++
++        self.assertEqual(
++            field.get_choices(include_blank=False),
++            [('a', 'Alpha'), ('z', 'Zulu')],
++        )
++
+     def test_get_choices_reverse_related_field(self):
+         self.assertChoicesEqual(
+             self.field.remote_field.get_choices(include_blank=False, ordering=('a',)),

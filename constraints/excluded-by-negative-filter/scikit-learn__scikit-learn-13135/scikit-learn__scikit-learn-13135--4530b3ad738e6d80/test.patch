@@ -1,0 +1,32 @@
+diff --git a/sklearn/preprocessing/tests/test_discretization.py b/sklearn/preprocessing/tests/test_discretization.py
+--- a/sklearn/preprocessing/tests/test_discretization.py
++++ b/sklearn/preprocessing/tests/test_discretization.py
+@@ -201,8 +201,28 @@ def test_nonuniform_strategies(strategy, expected_2bins, expected_3bins):
+     est = KBinsDiscretizer(n_bins=3, strategy=strategy, encode='ordinal')
+     Xt = est.fit_transform(X)
+     assert_array_equal(expected_3bins, Xt.ravel())
+ 
+ 
++def test_kmeans_strategy_preserves_kmeans_fitted_state(monkeypatch):
++    from sklearn import cluster
++
++    fitted_kmeans = []
++    original_fit = cluster.KMeans.fit
++
++    def fit_and_record(self, X, *args, **kwargs):
++        fitted = original_fit(self, X, *args, **kwargs)
++        fitted_kmeans.append(fitted)
++        return fitted
++
++    monkeypatch.setattr(cluster.KMeans, 'fit', fit_and_record)
++    X = np.array([0, 0.5, 2, 3, 9, 10]).reshape(-1, 1)
++    est = KBinsDiscretizer(n_bins=5, strategy='kmeans', encode='ordinal')
++    est.fit(X)
++
++    km = fitted_kmeans[0]
++    assert_array_equal(km.labels_, km.predict(X))
++
++
+ @pytest.mark.parametrize('strategy', ['uniform', 'kmeans', 'quantile'])
+ @pytest.mark.parametrize('encode', ['ordinal', 'onehot', 'onehot-dense'])
+ def test_inverse_transform(strategy, encode):

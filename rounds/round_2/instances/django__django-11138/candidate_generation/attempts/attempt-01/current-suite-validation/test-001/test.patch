@@ -1,0 +1,27 @@
+diff --git a/tests/backends/sqlite/tests.py b/tests/backends/sqlite/tests.py
+--- a/tests/backends/sqlite/tests.py
++++ b/tests/backends/sqlite/tests.py
+@@ -5,7 +5,7 @@ from sqlite3 import dbapi2
+ from unittest import mock
+ 
+ from django.core.exceptions import ImproperlyConfigured
+-from django.db import connection, transaction
++from django.db import OperationalError, connection, transaction
+ from django.db.models import Avg, StdDev, Sum, Variance
+ from django.db.models.aggregates import Aggregate
+ from django.db.models.fields import CharField
+@@ -89,6 +89,14 @@ class Tests(TestCase):
+                 value = bool(value) if value in {0, 1} else value
+                 self.assertIs(value, expected)
+ 
++    def test_datetime_cast_date_requires_connection_timezone(self):
++        with connection.cursor() as cursor:
++            with self.assertRaises(OperationalError):
++                cursor.execute(
++                    'SELECT django_datetime_cast_date(%s, %s)',
++                    ['2019-01-01 00:00:00', 'Africa/Nairobi'],
++                )
++
+ 
+ @unittest.skipUnless(connection.vendor == 'sqlite', 'SQLite tests')
+ @isolate_apps('backends')

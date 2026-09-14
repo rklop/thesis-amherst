@@ -1,0 +1,27 @@
+diff --git a/tests/utils_tests/test_autoreload.py b/tests/utils_tests/test_autoreload.py
+--- a/tests/utils_tests/test_autoreload.py
++++ b/tests/utils_tests/test_autoreload.py
+@@ -164,6 +164,22 @@ class TestChildArguments(SimpleTestCase):
+             autoreload.get_child_arguments(),
+             [sys.executable, '-m', 'django', 'runserver']
+         )
+ 
++    @mock.patch('sys.argv', ['/path/to/custom_package/__main__.py', 'runserver'])
++    @mock.patch('sys.warnoptions', [])
++    def test_run_as_non_django_module_without_django_main_file(self):
++        django_main_file = django.__main__.__file__
++        self.addCleanup(setattr, django.__main__, '__file__', django_main_file)
++        del django.__main__.__file__
++
++        main_module = sys.modules['__main__']
++        with mock.patch.object(
++            main_module, '__spec__', types.SimpleNamespace(parent='custom_package')
++        ):
++            self.assertEqual(
++                autoreload.get_child_arguments(),
++                [sys.executable, '-m', 'custom_package', 'runserver'],
++            )
++
+     @mock.patch('sys.argv', [__file__, 'runserver'])
+     @mock.patch('sys.warnoptions', ['error'])
+     def test_warnoptions(self):

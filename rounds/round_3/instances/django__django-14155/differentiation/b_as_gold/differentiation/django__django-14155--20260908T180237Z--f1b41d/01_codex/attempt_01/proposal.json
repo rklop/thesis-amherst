@@ -1,0 +1,10 @@
+{
+  "test_name": "test_partial_repr_reflects_keyword_updates",
+  "specification_gap": "ResolverMatch.__repr__() should describe the current arguments of its public func partial, rather than a snapshot taken when ResolverMatch was constructed.",
+  "input_description": "Construct a ResolverMatch with a functools.partial whose template_name keyword is initially 'initial.html', then update match.func.keywords to 'updated.html' before requesting repr(match).",
+  "expected_output": "The representation contains template_name='updated.html' and does not contain the stale template_name='initial.html'.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "functools.partial.keywords is publicly mutable. The gold implementation represents the actual partial at repr time, while candidate_a reconstructs it from copied constructor-time arguments and therefore reports stale state.",
+  "test_patch": "diff --git a/tests/urlpatterns_reverse/tests.py b/tests/urlpatterns_reverse/tests.py\n--- a/tests/urlpatterns_reverse/tests.py\n+++ b/tests/urlpatterns_reverse/tests.py\n@@ -1,6 +1,7 @@\n \"\"\"\n Unit tests for reverse URL lookups.\n \"\"\"\n+import functools\n import sys\n import threading\n \n@@ -1145,6 +1146,15 @@ class ResolverMatchTests(SimpleTestCase):\n             \"namespaces=[], route=^no_kwargs/([0-9]+)/([0-9]+)/$)\",\n         )\n \n+    def test_partial_repr_reflects_keyword_updates(self):\n+        partial_view = functools.partial(\n+            empty_view, template_name='initial.html',\n+        )\n+        match = ResolverMatch(partial_view, (), {})\n+        match.func.keywords['template_name'] = 'updated.html'\n+        match_repr = repr(match)\n+        self.assertIn(\"template_name='updated.html'\", match_repr)\n+        self.assertNotIn(\"template_name='initial.html'\", match_repr)\n+\n \n @override_settings(ROOT_URLCONF='urlpatterns_reverse.erroneous_urls')\n class ErroneousViewTests(SimpleTestCase):\n",
+  "test_command": "cd /testbed && python tests/runtests.py urlpatterns_reverse.ResolverMatchTests.test_partial_repr_reflects_keyword_updates"
+}

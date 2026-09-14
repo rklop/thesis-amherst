@@ -1,0 +1,36 @@
+diff --git a/testing/test_setuponly.py b/testing/test_setuponly.py
+--- a/testing/test_setuponly.py
++++ b/testing/test_setuponly.py
+@@ -153,6 +153,31 @@ def test_show_fixtures_with_parameters(testdir, mode):
+         ]
+     )
+ 
+ 
++def test_setup_show_truncates_long_bytes_parameter(testdir):
++    p = testdir.makepyfile(
++        """
++        import pytest
++
++        @pytest.mark.parametrize("data", [b"0123456789" * 10])
++        def test_data(data):
++            pass
++        """
++    )
++
++    result = testdir.runpytest("--setup-show", p)
++    result.assert_outcomes(passed=1)
++
++    displayed_parameters = [
++        line.split(" F data[", 1)[1].split("]", 1)[0]
++        for line in result.stdout.lines
++        if "SETUP    F data[" in line or "TEARDOWN F data[" in line
++    ]
++    assert len(displayed_parameters) == 2
++    full_parameter = repr(b"0123456789" * 10)
++    assert all("..." in value for value in displayed_parameters)
++    assert all(len(value) < len(full_parameter) for value in displayed_parameters)
++
++
+ def test_show_fixtures_with_parameter_ids(testdir, mode):
+     testdir.makeconftest(
+         '''

@@ -1,0 +1,10 @@
+{
+  "test_name": "test_exclude_with_outer_field_reference",
+  "specification_gap": "When exclude() traverses a FilteredRelation, F() references in the relation's condition must remain correlated with the same outer model row during subquery rewriting.",
+  "input_description": "Create a third author whose name equals the title of a book owned by the first author. Then exclude authors having one of their own books whose title equals their own name.",
+  "expected_output": "All three authors are returned in primary-key order because none owns a book whose title equals their own name. A title matching a different author's name must not exclude the book's owner.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "The cross-row title/name collision detects candidate_b's loss of correlation when it trims the filtered join and reconstructs the condition. The test observes only queryset results and covers the public combination of FilteredRelation, F(), and exclude().",
+  "test_patch": "diff --git a/tests/filtered_relation/tests.py b/tests/filtered_relation/tests.py\n--- a/tests/filtered_relation/tests.py\n+++ b/tests/filtered_relation/tests.py\n@@ -147,6 +147,17 @@ class FilteredRelationTests(TestCase):\n             [self.author2]\n         )\n \n+    def test_exclude_with_outer_field_reference(self):\n+        other_author = Author.objects.create(name=self.book1.title)\n+        queryset = Author.objects.annotate(\n+            same_title_book=FilteredRelation(\n+                'book', condition=Q(book__title=F('name')),\n+            ),\n+        ).exclude(same_title_book__isnull=False).order_by('pk')\n+        self.assertSequenceEqual(\n+            queryset, [self.author1, self.author2, other_author],\n+        )\n+\n     def test_with_m2m(self):\n         qs = Author.objects.annotate(\n             favorite_books_written_by_jane=FilteredRelation(\n",
+  "test_command": "python tests/runtests.py filtered_relation.tests.FilteredRelationTests.test_exclude_with_outer_field_reference"
+}

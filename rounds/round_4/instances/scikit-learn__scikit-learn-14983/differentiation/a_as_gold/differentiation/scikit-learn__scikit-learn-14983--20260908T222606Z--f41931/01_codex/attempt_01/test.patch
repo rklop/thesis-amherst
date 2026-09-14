@@ -1,0 +1,45 @@
+diff --git a/sklearn/model_selection/tests/test_split.py b/sklearn/model_selection/tests/test_split.py
+index d0c2b6cf8..94c769c47 100644
+--- a/sklearn/model_selection/tests/test_split.py
++++ b/sklearn/model_selection/tests/test_split.py
+@@ -42,6 +42,7 @@ from sklearn.linear_model import Ridge
+ 
+ from sklearn.model_selection._split import _validate_shuffle_split
+ from sklearn.model_selection._split import _build_repr
++from sklearn.model_selection._split import _RepeatedSplits
+ 
+ from sklearn.datasets import load_digits
+ from sklearn.datasets import make_classification
+@@ -975,9 +976,29 @@ def test_leave_one_p_group_out_error_on_fewer_number_of_groups():
+ @ignore_warnings
+ def test_repeated_cv_value_errors():
+     # n_repeats is not integer or <= 0
+     for cv in (RepeatedKFold, RepeatedStratifiedKFold):
+         assert_raises(ValueError, cv, n_repeats=0)
+         assert_raises(ValueError, cv, n_repeats=1.5)
+ 
+ 
++def test_repeated_splits_cvargs_do_not_shadow_split():
++    class SplitParameterCV:
++        def __init__(self, split, random_state=None, shuffle=False):
++            self.n_test = split
++
++        def split(self, X, y=None, groups=None):
++            test = np.arange(self.n_test)
++            train = np.arange(self.n_test, len(X))
++            yield train, test
++
++        def get_n_splits(self, X=None, y=None, groups=None):
++            return 1
++
++    repeated_cv = _RepeatedSplits(
++        SplitParameterCV, n_repeats=1, split=2)
++
++    train, test = next(repeated_cv.split(np.zeros((4, 1))))
++    assert_array_equal(train, [2, 3])
++    assert_array_equal(test, [0, 1])
++
++
+ def test_repeated_kfold_determinstic_split():
+     X = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
+     random_state = 258173307

@@ -1,0 +1,48 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "4c4230ac25f21fc9d41a59a078aeec5da14e08f9fff26a5a09a383f2a668f3d4",
+    "test_sha256": "7c58f66dd3bed311ae15fdc39f9d924fba2d7763abaaf196346d9f11819bccb7",
+    "test": {
+      "test_id": "django__django-13297--7c58f66dd3bed311",
+      "test_name": "test_simple_lazy_object_with_uuid_parameter",
+      "specification_gap": "SQLite must accept a SimpleLazyObject as a query parameter by adapting its string representation, even when the wrapped value is not itself a SQLite-native scalar. This covers UUID-valued URL kwargs in addition to the reported slug-string case.",
+      "expected_output": "The query succeeds and fetchone()[0] is the string '550e8400-e29b-41d4-a716-446655440000'.",
+      "test_patch": "diff --git a/tests/backends/sqlite/tests.py b/tests/backends/sqlite/tests.py\n--- a/tests/backends/sqlite/tests.py\n+++ b/tests/backends/sqlite/tests.py\n@@ -2,6 +2,7 @@ import re\n import tempfile\n import threading\n import unittest\n+import uuid\n from pathlib import Path\n from sqlite3 import dbapi2\n from unittest import mock\n@@ -14,6 +15,7 @@ from django.test import (\n     TestCase, TransactionTestCase, override_settings, skipIfDBFeature,\n )\n from django.test.utils import isolate_apps\n+from django.utils.functional import SimpleLazyObject\n \n from ..models import Author, Item, Object, Square\n \n@@ -97,6 +99,13 @@ class Tests(TestCase):\n                     cursor.execute('SELECT %s REGEXP %s', [string, pattern])\n                     value = cursor.fetchone()[0]\n                 value = bool(value) if value in {0, 1} else value\n                 self.assertIs(value, expected)\n \n+    def test_simple_lazy_object_with_uuid_parameter(self):\n+        value = uuid.UUID('550e8400-e29b-41d4-a716-446655440000')\n+        lazy_value = SimpleLazyObject(lambda: value)\n+        with connection.cursor() as cursor:\n+            cursor.execute('SELECT %s', [lazy_value])\n+            self.assertEqual(cursor.fetchone()[0], str(value))\n+\n     def test_pathlib_name(self):\n         with tempfile.TemporaryDirectory() as tmp:\n             settings_dict = {\n",
+      "test_command": "cd /testbed && ./tests/runtests.py backends.sqlite.tests.Tests.test_simple_lazy_object_with_uuid_parameter -v 2",
+      "test_patch_sha256": "7c58f66dd3bed311ae15fdc39f9d924fba2d7763abaaf196346d9f11819bccb7",
+      "polarity": "must_fail",
+      "negative_specification": "SQLite database adapter must NOT be required to implement a custom adapter for SimpleLazyObject to handle non-string types like UUID when used as query parameters.",
+      "expected_failure": {
+        "forbidden_substrings": [
+          "collected 0 items",
+          "no tests ran",
+          "ERROR collecting",
+          "command not found",
+          "No such file or directory",
+          "Could not find a version that satisfies the requirement",
+          "Temporary failure in name resolution"
+        ],
+        "kind": "behavioral_test_failure",
+        "reference_log_sha256": "3436911211644012e2fa6b7845b7e5903ecf134bb90a66e7e0faa40d77c5fba8",
+        "reference_returncode": 1,
+        "required_any_substrings": [
+          "FAILED"
+        ],
+        "required_substrings": [
+          "test_simple_lazy_object_with_uuid_parameter"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 1,
+    "passed": false,
+    "test_ran": true,
+    "duration_seconds": 1.795,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-13297--7c58f66dd3bed311",
+  "polarity": "must_fail"
+}

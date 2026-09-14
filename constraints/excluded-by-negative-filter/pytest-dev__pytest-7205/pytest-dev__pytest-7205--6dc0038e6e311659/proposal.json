@@ -1,0 +1,10 @@
+{
+  "test_name": "test_setup_show_bytes_parameter_not_truncated",
+  "specification_gap": "Using a safe representation must not introduce arbitrary truncation for modest fixture parameters. A 40-byte payload has a 43-character repr including b'' syntax; candidate_b's maxsize=42 loses content, while candidate_a preserves it.",
+  "input_description": "Run pytest under Python's -bb mode on a test parametrized with b\"0123456789012345678901234567890123456789\", using the public --setup-show option.",
+  "expected_output": "The run succeeds without BytesWarning, and stdout contains the complete setup line ending with SETUP    F data[b'0123456789012345678901234567890123456789'].",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This boundary case verifies that fixing bytes conversion preserves the existing informational value of --setup-show. It catches candidate_b's undocumented 42-character cutoff without requiring an unusually large parameter or inspecting implementation details.",
+  "test_patch": "diff --git a/testing/test_setuponly.py b/testing/test_setuponly.py\n--- a/testing/test_setuponly.py\n+++ b/testing/test_setuponly.py\n@@ -153,6 +153,23 @@ def test_show_fixtures_with_parameters(testdir, mode):\n         ]\n     )\n \n \n+def test_setup_show_bytes_parameter_not_truncated(testdir):\n+    p = testdir.makepyfile(\n+        \"\"\"\n+        import pytest\n+\n+        @pytest.mark.parametrize(\"data\", [b\"0123456789012345678901234567890123456789\"])\n+        def test_data(data):\n+            pass\n+        \"\"\"\n+    )\n+\n+    result = testdir.runpytest(\"--setup-show\", p)\n+    assert result.ret == 0\n+    expected = \"SETUP    F data[b'0123456789012345678901234567890123456789']\"\n+    assert any(line.endswith(expected) for line in result.stdout.lines)\n+\n+\n def test_show_fixtures_with_parameter_ids(testdir, mode):\n     testdir.makeconftest(\n         '''\n",
+  "test_command": "cd /testbed && python -bb -m pytest -q testing/test_setuponly.py::test_setup_show_bytes_parameter_not_truncated"
+}

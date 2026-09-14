@@ -1,0 +1,10 @@
+{
+  "test_name": "test_cla_deparents_artists_without_parenting_containers",
+  "specification_gap": "`Axes.cla()` must clear parent references on contained Artists, but a `Container` returned by a plotting method is only a grouping object and must not acquire Artist-only `.axes` or `.figure` attributes during clearing.",
+  "input_description": "Create an Axes, add one bar through the public `Axes.bar()` API, retain the returned `BarContainer` and its Rectangle artist, then call `Axes.cla()`.",
+  "expected_output": "The Rectangle's `axes` and `figure` attributes are both `None`. The `BarContainer` still has neither an `axes` nor a `figure` attribute.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "The generated candidate unnecessarily mutates every container by assigning `.axes` and `.figure`. This test uses a built-in public return type, exposing that observable API mutation while also checking the issue's required artist deparenting behavior.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_axes.py b/lib/matplotlib/tests/test_axes.py\n--- a/lib/matplotlib/tests/test_axes.py\n+++ b/lib/matplotlib/tests/test_axes.py\n@@ -355,6 +355,19 @@ def test_twinx_cla():\n     assert ax.patch.get_visible()\n     assert ax.yaxis.get_visible()\n \n+\n+def test_cla_deparents_artists_without_parenting_containers():\n+    fig, ax = plt.subplots()\n+    container = ax.bar([0], [1])\n+    patch = container.patches[0]\n+    assert not hasattr(container, \"axes\")\n+    assert not hasattr(container, \"figure\")\n+\n+    ax.cla()\n+\n+    assert patch.axes is None\n+    assert patch.figure is None\n+    assert not hasattr(container, \"axes\")\n+    assert not hasattr(container, \"figure\")\n+\n \n @pytest.mark.parametrize('twin', ('x', 'y'))\n @check_figures_equal(extensions=['png'], tol=0.19)\n",
+  "test_command": "python -m pytest -q lib/matplotlib/tests/test_axes.py::test_cla_deparents_artists_without_parenting_containers"
+}

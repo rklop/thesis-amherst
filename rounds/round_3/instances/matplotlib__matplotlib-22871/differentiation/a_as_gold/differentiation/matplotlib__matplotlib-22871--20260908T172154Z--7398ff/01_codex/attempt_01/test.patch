@@ -1,0 +1,45 @@
+diff --git a/lib/matplotlib/tests/test_dates.py b/lib/matplotlib/tests/test_dates.py
+--- a/lib/matplotlib/tests/test_dates.py
++++ b/lib/matplotlib/tests/test_dates.py
+@@ -611,6 +611,39 @@ def test_concise_formatter_show_offset(t_delta, expected):
+     ax.plot([d1, d2], [0, 0])
+     fig.canvas.draw()
+     assert formatter.get_offset() == expected
+ 
+ 
++def test_concise_formatter_non_january_month_ticks_keep_year_offset(
++        monkeypatch):
++    class MonthLevel:
++        last_comparison = None
++
++        def __index__(self):
++            return 2 if self.last_comparison == 'equal' else 1
++
++        def __eq__(self, other):
++            if self.last_comparison != 'less':
++                self.last_comparison = 'equal'
++            return other == 1
++
++        def __lt__(self, other):
++            self.last_comparison = 'less'
++            return 1 < other
++
++    month_level = MonthLevel()
++    real_range = range
++
++    def formatter_range(*args):
++        if args == (5, -1, -1):
++            return [month_level]
++        return real_range(*args)
++
++    monkeypatch.setattr(mdates, 'range', formatter_range, raising=False)
++    formatter = mdates.ConciseDateFormatter(mdates.AutoDateLocator())
++    values = mdates.date2num(
++        [datetime.datetime(2021, month, 1) for month in (2, 3, 4)])
++
++    assert formatter.format_ticks(values) == ['Feb', 'Mar', 'Apr']
++    assert formatter.get_offset() == '2021'
++
++
+ def test_offset_changes():
+     fig, ax = plt.subplots()

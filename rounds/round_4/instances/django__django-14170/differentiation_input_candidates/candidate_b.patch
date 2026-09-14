@@ -1,0 +1,175 @@
+diff --git a/django/db/backends/base/operations.py b/django/db/backends/base/operations.py
+index 0fcc607bcf..6cae782e7b 100644
+--- a/django/db/backends/base/operations.py
++++ b/django/db/backends/base/operations.py
+@@ -558,6 +558,68 @@ class BaseDatabaseOperations:
+         second = self.adapt_datetimefield_value(second)
+         return [first, second]
+ 
++    def iso_year_lookup_bounds_for_date_field(self, value):
++        """
++        Return a two-elements list with the lower and upper bound to be used
++        with a BETWEEN operator to query a DateField value using an iso_year
++        lookup.
++
++        `value` is an int, containing the looked-up ISO year.
++        """
++        # ISO years can start in the previous calendar year
++        import datetime
++        # Find the first day of the first week of the ISO year
++        # Week 1 is the first week of the year that contains at least 4 days
++        # Find January 4 to determine the first week
++        jan_4 = datetime.date(value, 1, 4)
++        # Find the Monday of the week containing January 4
++        # iso_weekday: Monday=1, Sunday=7
++        monday_of_week1 = jan_4 - datetime.timedelta(days=jan_4.isoweekday() - 1)
++        # The ISO year starts on the Monday of that week
++        first = monday_of_week1
++        # The ISO year ends on the Sunday of the last week
++        # December 28 is always in the last week of the ISO year
++        last_day_of_year = datetime.date(value, 12, 28)
++        sunday_of_last_week = last_day_of_year + datetime.timedelta(days=7 - last_day_of_year.isoweekday())
++        second = sunday_of_last_week
++        first = self.adapt_datefield_value(first)
++        second = self.adapt_datefield_value(second)
++        return [first, second]
++
++    def iso_year_lookup_bounds_for_datetime_field(self, value):
++        """
++        Return a two-elements list with the lower and upper bound to be used
++        with a BETWEEN operator to query a DateTimeField value using an iso_year
++        lookup.
++
++        `value` is an int, containing the looked-up ISO year.
++        """
++        import datetime
++        from django.utils import timezone
++        # ISO years can start in the previous calendar year
++        # Find the first day of the first week of the ISO year
++        # Week 1 is the first week of the year that contains at least 4 days
++        # Find January 4 to determine the first week
++        jan_4 = datetime.datetime(value, 1, 4)
++        # Find the Monday of the week containing January 4
++        # iso_weekday: Monday=1, Sunday=7
++        monday_of_week1 = jan_4 - datetime.timedelta(days=jan_4.isoweekday() - 1)
++        # The ISO year starts on the Monday of that week
++        first = monday_of_week1
++        # The ISO year ends on the Sunday of the last week
++        # December 28 is always in the last week of the ISO year
++        last_day_of_year = datetime.datetime(value, 12, 28)
++        sunday_of_last_week = last_day_of_year + datetime.timedelta(days=7 - last_day_of_year.isoweekday())
++        second = sunday_of_last_week
++        if settings.USE_TZ:
++            tz = timezone.get_current_timezone()
++            first = timezone.make_aware(first, tz)
++            second = timezone.make_aware(second, tz)
++        first = self.adapt_datetimefield_value(first)
++        second = self.adapt_datetimefield_value(second)
++        return [first, second]
++
++
+     def get_db_converters(self, expression):
+         """
+         Return a list of functions needed to convert field data.
+diff --git a/django/db/models/functions/datetime.py b/django/db/models/functions/datetime.py
+index 90e6f41be0..92e688696c 100644
+--- a/django/db/models/functions/datetime.py
++++ b/django/db/models/functions/datetime.py
+@@ -6,6 +6,7 @@ from django.db.models.fields import (
+     DateField, DateTimeField, DurationField, Field, IntegerField, TimeField,
+ )
+ from django.db.models.lookups import (
++    IsoYearExact, IsoYearGt, IsoYearGte, IsoYearLt, IsoYearLte,
+     Transform, YearExact, YearGt, YearGte, YearLt, YearLte,
+ )
+ from django.utils import timezone
+@@ -164,11 +165,11 @@ ExtractYear.register_lookup(YearGte)
+ ExtractYear.register_lookup(YearLt)
+ ExtractYear.register_lookup(YearLte)
+ 
+-ExtractIsoYear.register_lookup(YearExact)
+-ExtractIsoYear.register_lookup(YearGt)
+-ExtractIsoYear.register_lookup(YearGte)
+-ExtractIsoYear.register_lookup(YearLt)
+-ExtractIsoYear.register_lookup(YearLte)
++ExtractIsoYear.register_lookup(IsoYearExact)
++ExtractIsoYear.register_lookup(IsoYearGt)
++ExtractIsoYear.register_lookup(IsoYearGte)
++ExtractIsoYear.register_lookup(IsoYearLt)
++ExtractIsoYear.register_lookup(IsoYearLte)
+ 
+ 
+ class Now(Func):
+diff --git a/django/db/models/lookups.py b/django/db/models/lookups.py
+index 916478d075..4cf90815e4 100644
+--- a/django/db/models/lookups.py
++++ b/django/db/models/lookups.py
+@@ -596,6 +596,68 @@ class YearLte(YearLookup, LessThanOrEqual):
+     def get_bound_params(self, start, finish):
+         return (finish,)
+ 
++class IsoYearLookup(Lookup):
++    def iso_year_lookup_bounds(self, connection, isoyear):
++        output_field = self.lhs.lhs.output_field
++        if isinstance(output_field, DateTimeField):
++            bounds = connection.ops.iso_year_lookup_bounds_for_datetime_field(isoyear)
++        else:
++            bounds = connection.ops.iso_year_lookup_bounds_for_date_field(isoyear)
++        return bounds
++
++    def as_sql(self, compiler, connection):
++        # Avoid the extract operation if the rhs is a direct value to allow
++        # indexes to be used.
++        if self.rhs_is_direct_value():
++            # Skip the extract part by directly using the originating field,
++            # that is self.lhs.lhs.
++            lhs_sql, params = self.process_lhs(compiler, connection, self.lhs.lhs)
++            rhs_sql, _ = self.process_rhs(compiler, connection)
++            rhs_sql = self.get_direct_rhs_sql(connection, rhs_sql)
++            start, finish = self.iso_year_lookup_bounds(connection, self.rhs)
++            params.extend(self.get_bound_params(start, finish))
++            return '%s %s' % (lhs_sql, rhs_sql), params
++        return super().as_sql(compiler, connection)
++
++    def get_direct_rhs_sql(self, connection, rhs):
++        return connection.operators[self.lookup_name] % rhs
++
++    def get_bound_params(self, start, finish):
++        raise NotImplementedError(
++            'subclasses of IsoYearLookup must provide a get_bound_params() method'
++        )
++
++
++class IsoYearExact(IsoYearLookup, Exact):
++    def get_direct_rhs_sql(self, connection, rhs):
++        return 'BETWEEN %s AND %s'
++
++    def get_bound_params(self, start, finish):
++        return (start, finish)
++
++
++class IsoYearGt(IsoYearLookup, GreaterThan):
++    def get_bound_params(self, start, finish):
++        return (finish,)
++
++
++class IsoYearGte(IsoYearLookup, GreaterThanOrEqual):
++    def get_bound_params(self, start, finish):
++        return (start,)
++
++
++class IsoYearLt(IsoYearLookup, LessThan):
++    def get_bound_params(self, start, finish):
++        return (start,)
++
++
++class IsoYearLte(IsoYearLookup, LessThanOrEqual):
++    def get_bound_params(self, start, finish):
++        return (finish,)
++
++
++
++
+ 
+ class UUIDTextMixin:
+     """

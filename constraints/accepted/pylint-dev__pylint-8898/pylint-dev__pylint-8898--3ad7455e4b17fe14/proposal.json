@@ -1,0 +1,10 @@
+{
+  "test_name": "test_ignore_paths_keeps_separator_after_literal_brace",
+  "specification_gap": "The new brace-aware parsing applies to ordinary regex-list options such as `bad-name-rgxs`, but must not change the existing comma-separated contract of the separate `--ignore-paths` option. A `{` that does not begin a quantifier is a valid literal regex character and must not hide a subsequent CSV separator.",
+  "input_description": "Parse `--ignore-paths=foo{,second` through Pylint's command-line entry point. It supplies two path regexes: `foo{` and `second`.",
+  "expected_output": "The resulting ignore-path patterns independently match `foo{` and `second`. The designated gold retains this behavior, while the generated candidate merges them into one pattern because it treats every opening brace as an unclosed quantifier.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises an alternate public option type unintentionally modified by the generated candidate and distinguishes regex grammar from CSV grammar without asserting private helper implementation details.",
+  "test_patch": "diff --git a/tests/config/test_argparse_config.py b/tests/config/test_argparse_config.py\n--- a/tests/config/test_argparse_config.py\n+++ b/tests/config/test_argparse_config.py\n@@ -71,6 +71,14 @@ class TestDeprecationOptions:\n         assert run.linter.config.ignore_patterns == run.linter.config.black_list_re\n \n \n class TestArguments:\n+    @staticmethod\n+    def test_ignore_paths_keeps_separator_after_literal_brace() -> None:\n+        \"\"\"Ensure a literal opening brace does not hide a CSV separator.\"\"\"\n+        run = Run([EMPTY_MODULE, \"--ignore-paths=foo{,second\"], exit=False)\n+        patterns = run.linter.config.ignore_paths\n+        assert any(pattern.match(\"foo{\") for pattern in patterns)\n+        assert any(pattern.match(\"second\") for pattern in patterns)\n+\n     @staticmethod\n     def test_unrecognized_argument() -> None:\n",
+  "test_command": "python -m pytest -q tests/config/test_argparse_config.py::TestArguments::test_ignore_paths_keeps_separator_after_literal_brace"
+}

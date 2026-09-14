@@ -1,0 +1,51 @@
+2026-09-08T13:57:28.059062+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-09-08T13:57:28.623474+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-09-08T13:57:29.029354+00:00 [INFO] candidate_a applies cleanly
+2026-09-08T13:57:29.441518+00:00 [INFO] candidate_b applies cleanly
+2026-09-08T13:57:29.441624+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-09-08T13:57:30.623515+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/runs/spec-refinement-core-r2-negative-filter-on-v1/round-02/bidirectional-differentiation/instances/django__django-11848/b_as_gold/differentiation/django__django-11848--20260908T135728Z--7862df/workspace/repo
+2026-09-08T13:57:30.623572+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-09-08T13:57:30.624105+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-09-08T13:57:32.073955+00:00 [INFO] Codex thread started: 01a0814f-4918-7940-af6c-ffd33855229b
+2026-09-08T14:00:58.464715+00:00 [INFO] Codex turn completed; usage={'input_tokens': 173265, 'cached_input_tokens': 132608, 'cache_write_input_tokens': 0, 'output_tokens': 5027, 'reasoning_output_tokens': 3217}
+2026-09-08T14:00:59.761590+00:00 [INFO] Codex attempt 1 proposed 'test_parsing_rfc850_year_at_century_boundary' in tests/utils_tests/test_http.py
+2026-09-08T14:01:01.232667+00:00 [INFO] attempt 1 candidate_a: ran=True passed=False exit=1
+2026-09-08T14:01:02.578770+00:00 [INFO] attempt 1 candidate_b: ran=True passed=True exit=0
+2026-09-08T14:01:02.580004+00:00 [INFO] Validated separation on Codex attempt 1: candidate_a=FAIL, candidate_b=PASS
+2026-09-08T14:01:02.580037+00:00 [STAGE] 5/6 MiniMax rating disabled; execution-only mode
+2026-09-08T14:01:02.580060+00:00 [STAGE] 6/6 Writing consolidated results
+2026-09-08T14:01:02.816047+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/utils_tests/test_http.py b/tests/utils_tests/test_http.py
+--- a/tests/utils_tests/test_http.py
++++ b/tests/utils_tests/test_http.py
+@@ -1,5 +1,6 @@
+ import unittest
+ from datetime import datetime
++from unittest import mock
+ 
+ from django.test import SimpleTestCase, ignore_warnings
+ from django.utils.datastructures import MultiValueDict
+@@ -319,6 +320,16 @@ class HttpDateProcessingTests(unittest.TestCase):
+         parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')
+         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
+ 
++    def test_parsing_rfc850_year_at_century_boundary(self):
++        class MockDateTime(datetime):
++            @classmethod
++            def utcnow(cls):
++                return cls(2100, 1, 1)
++
++        with mock.patch('django.utils.http.datetime.datetime', MockDateTime):
++            parsed = parse_http_date('Friday, 06-Nov-50 08:49:37 GMT')
++        self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(2150, 11, 6, 8, 49, 37))
++
+     def test_parsing_asctime(self):
+         parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
+         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
+===== END DIFFERENTIATING TEST =====
+
+2026-09-08T14:01:02.816235+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/runs/spec-refinement-core-r2-negative-filter-on-v1/round-02/bidirectional-differentiation/instances/django__django-11848/b_as_gold/differentiation/django__django-11848--20260908T135728Z--7862df/SUMMARY.md

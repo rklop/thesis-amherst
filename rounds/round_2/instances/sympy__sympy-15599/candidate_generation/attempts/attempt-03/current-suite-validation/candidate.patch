@@ -1,0 +1,30 @@
+diff --git a/sympy/core/mod.py b/sympy/core/mod.py
+index eae25630c..1e307b919 100644
+--- a/sympy/core/mod.py
++++ b/sympy/core/mod.py
+@@ -139,6 +139,25 @@ def doit(p, q):
+                 net = prod_mod1*prod_mod
+                 return prod_non_mod*cls(net, q)
+ 
++            # Apply simplification for integer-only products without Mod terms (issue 15493)
++            # This handles cases like Mod(3*i, 2) -> Mod(i, 2) where i is an integer
++            if not mod_l and all(x.is_integer for x in non_mod_l):
++                was = non_mod_l[:]
++                non_mod_l = [cls(x, q) for x in non_mod_l]
++                changed = was != non_mod_l
++                if changed:
++                    # finding distributive term
++                    mod = []
++                    non_mod = []
++                    for j in non_mod_l:
++                        if isinstance(j, cls):
++                            mod.append(j.args[0])
++                        else:
++                            non_mod.append(j)
++                    prod_mod = Mul(*mod)
++                    prod_non_mod = Mul(*non_mod)
++                    return prod_non_mod*cls(prod_mod, q)
++
+         # XXX other possibilities?
+ 
+         # extract gcd; any further simplification should be done by the user

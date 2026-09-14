@@ -1,0 +1,154 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d79de154e..2780cc710 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -853,6 +853,7 @@ class PyProperty(PyObject):
+     option_spec.update({
+         'abstractmethod': directives.flag,
+         'type': directives.unchanged,
++        'classmethod': directives.flag,
+     })
+ 
+     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:
+@@ -866,6 +867,8 @@ class PyProperty(PyObject):
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+         prefix = ['property']
++        if 'classmethod' in self.options:
++            prefix.insert(0, 'class')
+         if 'abstractmethod' in self.options:
+             prefix.insert(0, 'abstract')
+ 
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1cecb1f79..dabb1a830 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -729,7 +729,17 @@ class Documenter:
+             if cls:
+                 cls_doc = self.get_attr(cls, '__doc__', None)
+                 if cls_doc == doc:
+-                    doc = None
++                    # However, if this is a classmethod-wrapped property (Python 3.9+),
++                    # we need to get the docstring from the wrapped property
++                    if isinstance(member, classmethod):
++                        # Get the actual property and its docstring
++                        prop = self.get_attr(member, '__func__', None)
++                        if prop and isinstance(prop, property):
++                            doc = self.get_attr(prop.fget, '__doc__', None)
++                        else:
++                            doc = None
++                    else:
++                        doc = None
+ 
+             if isinstance(obj, ObjectMember) and obj.docstring:
+                 # hack for ClassDocumenter to inject docstring via ObjectMember
+@@ -2002,6 +2012,19 @@ class DataDocumenter(GenericAliasMixin, NewTypeMixin, TypeVarMixin,
+     def document_members(self, all_members: bool = False) -> None:
+         pass
+ 
++    def import_object(self, raiseerror: bool = False) -> bool:
++        ret = super().import_object(raiseerror)
++        if ret:
++            # Check if this is a classmethod-wrapped property (Python 3.9+)
++            # In this case, we need to extract the actual property from the classmethod
++            # but also track that it was a classmethod to add the :classmethod: directive
++            if isinstance(self.object, classmethod):
++                self._original_classmethod = True
++                self.object = self.object.__func__
++            else:
++                self._original_classmethod = False
++        return ret
++
+     def get_real_modname(self) -> str:
+         real_modname = self.get_attr(self.parent or self.object, '__module__', None)
+         return real_modname or self.modname
+@@ -2666,6 +2689,19 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+     def document_members(self, all_members: bool = False) -> None:
+         pass
+ 
++    def import_object(self, raiseerror: bool = False) -> bool:
++        ret = super().import_object(raiseerror)
++        if ret:
++            # Check if this is a classmethod-wrapped property (Python 3.9+)
++            # In this case, we need to extract the actual property from the classmethod
++            # but also track that it was a classmethod to add the :classmethod: directive
++            if isinstance(self.object, classmethod):
++                self._original_classmethod = True
++                self.object = self.object.__func__
++            else:
++                self._original_classmethod = False
++        return ret
++
+     def get_real_modname(self) -> str:
+         real_modname = self.get_attr(self.parent or self.object, '__module__', None)
+         return real_modname or self.modname
+@@ -2676,6 +2712,10 @@ class PropertyDocumenter(DocstringStripSignatureMixin, ClassLevelDocumenter):  #
+         if inspect.isabstractmethod(self.object):
+             self.add_line('   :abstractmethod:', sourcename)
+ 
++        # Check if this was originally a classmethod-wrapped property
++        if getattr(self, '_original_classmethod', False):
++            self.add_line('   :classmethod:', sourcename)
++
+         if safe_getattr(self.object, 'fget', None) and self.config.autodoc_typehints != 'none':
+             try:
+                 signature = inspect.signature(self.object.fget,
+diff --git a/sphinx/ext/autodoc/importer.py b/sphinx/ext/autodoc/importer.py
+index 1a8ea0973..18bc019d5 100644
+--- a/sphinx/ext/autodoc/importer.py
++++ b/sphinx/ext/autodoc/importer.py
+@@ -17,7 +17,7 @@ from sphinx.deprecation import RemovedInSphinx50Warning
+ from sphinx.ext.autodoc.mock import ismock, undecorate
+ from sphinx.pycode import ModuleAnalyzer, PycodeError
+ from sphinx.util import logging
+-from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass,
++from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass, isproperty,
+                                  safe_getattr)
+ 
+ if False:
+@@ -109,6 +109,14 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
+             mangled_name = mangle(obj, attrname)
+             obj = attrgetter(obj, mangled_name)
+ 
++            # For class-level access on a class, check if the descriptor in __dict__
++            # is a classmethod-wrapped property (Python 3.9+)
++            # In that case, getattr returns the evaluated value, not the descriptor
++            if parent is not None and isinstance(parent, type) and attrname in parent.__dict__:
++                raw = parent.__dict__[attrname]
++                if isproperty(raw):
++                    obj = raw
++
+             try:
+                 logger.debug('[autodoc] => %r', obj)
+             except TypeError:
+@@ -281,6 +289,12 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable
+             unmangled = unmangle(subject, name)
+             if unmangled and unmangled not in members:
+                 if name in obj_dict:
++                    # Check if this is a classmethod-wrapped property (Python 3.9+)
++                    # In this case, attrgetter returns the evaluated value, not the descriptor
++                    raw_value = obj_dict[name]
++                    if isproperty(raw_value):
++                        # Use the raw property descriptor, not the evaluated value
++                        value = raw_value
+                     members[unmangled] = ObjectMember(unmangled, value, class_=subject)
+                 else:
+                     members[unmangled] = ObjectMember(unmangled, value)
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 23dd9e930..6f11ebc52 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -390,6 +390,13 @@ def isproperty(obj: Any) -> bool:
+         if isinstance(obj, cached_property):
+             return True
+ 
++    if isinstance(obj, classmethod):
++        # Check if the classmethod wraps a property (Python 3.9+)
++        # When using @classmethod @property, the __func__ is the property
++        obj = obj.__func__
++        if isinstance(obj, property):
++            return True
++
+     return isinstance(obj, property)
+ 
+ 

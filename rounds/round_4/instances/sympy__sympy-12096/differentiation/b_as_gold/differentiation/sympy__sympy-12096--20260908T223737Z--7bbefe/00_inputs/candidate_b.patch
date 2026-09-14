@@ -1,0 +1,26 @@
+diff --git a/sympy/core/function.py b/sympy/core/function.py
+index 1b8005e1d..4b439bcea 100644
+--- a/sympy/core/function.py
++++ b/sympy/core/function.py
+@@ -507,7 +507,20 @@ def _eval_evalf(self, prec):
+             func = getattr(mpmath, fname)
+         except (AttributeError, KeyError):
+             try:
+-                return Float(self._imp_(*self.args), prec)
++                # Evaluate the arguments at higher precision first
++                # (similar to how mpmath handles this)
++                args = [arg.evalf(prec + 5) for arg in self.args]
++                # If any argument is still a SymPy expression (not a number),
++                # we can't evaluate this function numerically
++                from sympy.core.expr import Expr
++                if any(isinstance(arg, Expr) and not arg.is_number for arg in args):
++                    return
++                result = self._imp_(*args)
++                # Evaluate the result as well (it might contain
++                # SymPy expressions that need further evaluation)
++                if hasattr(result, 'evalf'):
++                    return result.evalf(prec)
++                return Float(result, prec)
+             except (AttributeError, TypeError, ValueError):
+                 return
+ 

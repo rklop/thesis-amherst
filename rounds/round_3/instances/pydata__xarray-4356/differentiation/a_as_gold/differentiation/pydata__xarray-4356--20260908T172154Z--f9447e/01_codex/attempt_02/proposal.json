@@ -1,0 +1,10 @@
+{
+  "test_name": "test_min_count_multiple_dims_dask_scalar",
+  "specification_gap": "When all explicitly named dimensions are reduced, min_count must still use the total valid-element count and return an NA scalar for a dask-backed DataArray. The zero-dimensional lazy result must not be treated as a mutable non-scalar array.",
+  "input_description": "A 2\u00d72 dask-backed DataArray containing one finite value and three NaNs, summed over both dimensions with skipna=True and min_count=2.",
+  "expected_output": "A scalar DataArray whose computed value is NaN because only one valid element is present.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises the issue's multiple-dimension API at the scalar-output boundary on a supported lazy backend. Candidate_b routes that zero-dimensional dask result through boolean item assignment, while candidate_a uses the scalar min_count behavior.",
+  "test_patch": "diff --git a/xarray/tests/test_duck_array_ops.py b/xarray/tests/test_duck_array_ops.py\n--- a/xarray/tests/test_duck_array_ops.py\n+++ b/xarray/tests/test_duck_array_ops.py\n@@ -593,6 +593,19 @@ def test_min_count(dim_num, dtype, dask, func, aggdim):\n     expected = series_reduce(da, func, skipna=True, dim=aggdim, min_count=min_count)\n     assert_allclose(actual, expected)\n     assert_dask_array(actual, dask)\n+\n+\n+@requires_dask\n+def test_min_count_multiple_dims_dask_scalar():\n+    import dask.array as da\n+\n+    data = da.from_array(\n+        np.array([[1.0, np.nan], [np.nan, np.nan]]), chunks=(1, 2)\n+    )\n+    actual = DataArray(data, dims=(\"x\", \"y\")).sum(\n+        dim=(\"x\", \"y\"), skipna=True, min_count=2\n+    )\n+    assert np.isnan(actual.compute().item())\n \n \n @pytest.mark.parametrize(\"func\", [\"sum\", \"prod\"])\n",
+  "test_command": "pytest -q xarray/tests/test_duck_array_ops.py::test_min_count_multiple_dims_dask_scalar"
+}

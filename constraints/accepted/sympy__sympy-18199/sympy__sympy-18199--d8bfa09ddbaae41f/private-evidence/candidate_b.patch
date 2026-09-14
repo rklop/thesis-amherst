@@ -1,0 +1,209 @@
+diff --git a/sympy/ntheory/residue_ntheory.py b/sympy/ntheory/residue_ntheory.py
+index 9a3052d4c3..3b6e1841ac 100644
+--- a/sympy/ntheory/residue_ntheory.py
++++ b/sympy/ntheory/residue_ntheory.py
+@@ -743,6 +743,93 @@ def _nthroot_mod1(s, q, p, all_roots):
+     return min(res)
+ 
+ 
++def _nthroot_mod_prime_power(a, n, p, k, all_roots):
++    """
++    Find the solutions to x**n = a mod p**k
++    where p is prime.
++    """
++    from sympy.core.numbers import igcdex
++    pk = p ** k
++    a_mod = a % pk
++    
++    # Handle case when a % p == 0
++    if a_mod % p == 0:
++        if a_mod == 0:
++            # x**n = 0 mod p**k => p**k divides x**n
++            # Need to find x = p^e * r where n*e >= k
++            e = (k + n - 1) // n  # ceil(k/n)
++            pe = p ** e
++            roots = [i * pe for i in range(pk // pe)]
++            if all_roots:
++                return sorted(roots)
++            else:
++                return min(roots) if roots else None
++        else:
++            # a is divisible by p but not zero
++            mu = multiplicity(p, a_mod)
++            if mu % n != 0:
++                return [] if all_roots else None
++            # Reduce to a' where a' is not divisible by p
++            pm = p ** mu
++            a_reduced = a_mod // pm
++            k_reduced = k - mu
++            roots_reduced = _nthroot_mod_prime_power(a_reduced, n, p, k_reduced, True)
++            if not roots_reduced:
++                return [] if all_roots else None
++            # Combine with p^mu
++            e = mu // n
++            if mu % n != 0:
++                e += 1
++            pe = p ** e
++            roots = [r * pe for r in roots_reduced]
++            if all_roots:
++                return sorted(roots)
++            else:
++                return min(roots) if roots else None
++    
++    # a is not divisible by p
++    if k == 1:
++        # Just use the prime case
++        return nthroot_mod(a_mod, n, p, all_roots)
++    
++    # For higher prime powers, use Hensel lifting
++    # First find a root modulo p
++    roots_p = nthroot_mod(a_mod, n, p, True)
++    if not roots_p:
++        return [] if all_roots else None
++    
++    # Lift each root to mod p**k using Hensel lifting
++    # Each root r mod p can lift to multiple roots mod p^k
++    roots = []
++    for r in roots_p:
++        # Start with the root mod p
++        current_roots = [r]
++        # Lift one digit at a time
++        for e in range(1, k):
++            pe = p ** e
++            pe_next = p ** (e + 1)
++            # Try to lift each current root
++            new_roots = []
++            for r_current in current_roots:
++                for t in range(p):
++                    r_new = r_current + pe * t
++                    if pow(r_new, n, pe_next) == a_mod % pe_next:
++                        new_roots.append(r_new)
++            if not new_roots:
++                break
++            current_roots = new_roots
++        # Add all valid roots
++        roots.extend(current_roots)
++    
++    # Remove duplicates
++    roots = list(set(roots))
++    
++    if all_roots:
++        return sorted(roots)
++    else:
++        return min(roots) if roots else None
++
++
+ def nthroot_mod(a, n, p, all_roots=False):
+     """
+     Find the solutions to ``x**n = a mod p``
+@@ -765,16 +852,106 @@ def nthroot_mod(a, n, p, all_roots=False):
+     [8, 11]
+     >>> nthroot_mod(68, 3, 109)
+     23
++    >>> nthroot_mod(24, 3, 8, True)
++    [0, 2, 4, 6]
+     """
+     from sympy.core.numbers import igcdex
++    from sympy.polys.galoistools import gf_crt1, gf_crt2
++    from sympy.polys.domains import ZZ
++    from sympy.ntheory.residue_ntheory import _product
+     a, n, p = as_int(a), as_int(n), as_int(p)
++    
++    # For composite moduli, always return all roots
++    if not isprime(p):
++        all_roots = True
++    
+     if n == 2:
+         return sqrt_mod(a, p, all_roots)
+-    # see Hackman "Elementary Number Theory" (2009), page 76
+-    if not is_nthpow_residue(a, n, p):
+-        return None
++    
++    # Handle case when a % p == 0
++    if a % p == 0:
++        if isprime(p):
++            # For prime modulus, only root is 0
++            if all_roots:
++                return [0]
++            else:
++                return 0
++        else:
++            # For composite modulus, factor p and solve
++            factors = factorint(p)
++            if len(factors) == 1:
++                # Single prime power
++                prime, k = list(factors.items())[0]
++                return _nthroot_mod_prime_power(a, n, prime, k, all_roots)
++            else:
++                # Multiple prime powers - use CRT
++                roots = None
++                pk_list = []
++                for prime, exp in factors.items():
++                    pk = prime ** exp
++                    pk_list.append(pk)
++                    roots_pk = _nthroot_mod_prime_power(a, n, prime, exp, True)
++                    if roots_pk is None or roots_pk == []:
++                        roots = []
++                        break
++                    if roots is None:
++                        roots = roots_pk
++                    else:
++                        new_roots = []
++                        mm, e, s = gf_crt1(pk_list, ZZ)
++                        for vx in _product(roots, roots_pk):
++                                r = gf_crt2(vx, pk_list, mm, e, s, ZZ)
++                                new_roots.append(r)
++                        roots = new_roots
++                if roots is None or roots == []:
++                    return [] if all_roots else None
++                # For composite moduli, always return all roots
++                if all_roots:
++                    return sorted(roots)
++                else:
++                    return min(roots)
++    
++    # For prime moduli, check if it's an nth power residue
++    if isprime(p):
++        # see Hackman "Elementary Number Theory" (2009), page 76
++        if not is_nthpow_residue(a, n, p):
++            return None
++    
++    # For composite moduli, we solve using prime power decomposition
+     if not isprime(p):
+-        raise NotImplementedError("Not implemented for composite p")
++        # Handle composite modulus
++        factors = factorint(p)
++        if len(factors) == 1:
++            # Single prime power
++            prime, k = list(factors.items())[0]
++            return _nthroot_mod_prime_power(a, n, prime, k, all_roots)
++        else:
++            # Multiple prime powers - use CRT
++            roots = None
++            pk_list = []
++            for prime, exp in factors.items():
++                pk = prime ** exp
++                pk_list.append(pk)
++                roots_pk = _nthroot_mod_prime_power(a, n, prime, exp, True)
++                if roots_pk is None or roots_pk == []:
++                    roots = []
++                    break
++                if roots is None:
++                    roots = roots_pk
++                else:
++                    new_roots = []
++                    mm, e, s = gf_crt1(pk_list, ZZ)
++                    for vx in _product(roots, roots_pk):
++                        r = gf_crt2(vx, pk_list, mm, e, s, ZZ)
++                        new_roots.append(r)
++                    roots = new_roots
++            if roots is None or roots == []:
++                return [] if all_roots else None
++            # For composite moduli, always return all roots
++            if all_roots:
++                return sorted(roots)
++            else:
++                return min(roots)
+ 
+     if (p - 1) % n == 0:
+         return _nthroot_mod1(a, n, p, all_roots)

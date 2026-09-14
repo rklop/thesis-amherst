@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "6b61095d11ead259949e045c839ada30b9d80fcb700c625df2aa8a61601f9921",
+    "test_sha256": "94a66923f14b8ae0929d7feb0976b7b05d8ff4642c2d16a0845805caad481b7a",
+    "test": {
+      "test_id": "django__django-16100--94a66923f14b8ae0",
+      "test_name": "test_list_editable_message_failure_after_commit",
+      "specification_gap": "The list_editable transaction covers persistence processing, but not the subsequent success notification. If the public ModelAdmin.message_user() hook fails after successful processing, its exception propagates without rolling back the completed edits.",
+      "expected_output": "The POST raises RuntimeError(\"message backend failed\"), and refreshing the Person from the database still returns gender=2 because the list edit committed before success notification began.",
+      "test_patch": "diff --git a/tests/admin_views/tests.py b/tests/admin_views/tests.py\n--- a/tests/admin_views/tests.py\n+++ b/tests/admin_views/tests.py\n@@ -4045,6 +4045,31 @@ class AdminViewListEditable(TestCase):\n         response = self.client.post(\n             reverse(\"admin:admin_views_person_changelist\"), data, follow=True\n         )\n         self.assertEqual(len(response.context[\"messages\"]), 1)\n \n+    def test_list_editable_message_failure_after_commit(self):\n+        \"\"\"A failure reporting success doesn't roll back completed list edits.\"\"\"\n+        data = {\n+            \"form-TOTAL_FORMS\": \"1\",\n+            \"form-INITIAL_FORMS\": \"1\",\n+            \"form-MAX_NUM_FORMS\": \"0\",\n+            \"form-0-id\": str(self.per1.pk),\n+            \"form-0-gender\": \"2\",\n+            \"form-0-alive\": \"checked\",\n+            \"_save\": \"Save\",\n+        }\n+        model_admin = site._registry[Person]\n+        with mock.patch.object(\n+            model_admin,\n+            \"message_user\",\n+            side_effect=RuntimeError(\"message backend failed\"),\n+        ):\n+            with self.assertRaisesMessage(RuntimeError, \"message backend failed\"):\n+                self.client.post(\n+                    reverse(\"admin:admin_views_person_changelist\"), data\n+                )\n+\n+        self.per1.refresh_from_db()\n+        self.assertEqual(self.per1.gender, 2)\n+\n     def test_post_submission(self):\n         data = {\n             \"form-TOTAL_FORMS\": \"3\",\n",
+      "test_command": "./tests/runtests.py admin_views.tests.AdminViewListEditable.test_list_editable_message_failure_after_commit",
+      "test_patch_sha256": "94a66923f14b8ae0929d7feb0976b7b05d8ff4642c2d16a0845805caad481b7a",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 1,
+    "passed": false,
+    "test_ran": true,
+    "duration_seconds": 2.221,
+    "log_path": "test-002/submitted_candidate.log"
+  },
+  "outcome": "violated",
+  "test_id": "django__django-16100--94a66923f14b8ae0",
+  "polarity": "must_pass"
+}

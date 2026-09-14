@@ -1,0 +1,10 @@
+{
+  "test_name": "test_convert_empty_result_cannot_grow",
+  "specification_gap": "An empty categorical conversion must preserve the multidimensional shape without allowing the returned placeholder to be grown in place into synthetic, unspecified data.",
+  "input_description": "Convert an empty object array with shape (0, 2) using StrCategoryConverter, verify the resulting float array's shape, then attempt to resize it in place to (1, 2).",
+  "expected_output": "The converter returns an empty float array with shape (0, 2), and attempting to grow that placeholder in place raises ValueError.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "Both candidates suppress the erroneous warning and preserve ordinary empty-array shape. This boundary case exercises their sole externally observable disagreement: candidate_b returns the shape-preserving view produced by reshape, which cannot be grown in place, whereas candidate_a returns an owning np.empty allocation that can be enlarged into unspecified data.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_category.py b/lib/matplotlib/tests/test_category.py\n--- a/lib/matplotlib/tests/test_category.py\n+++ b/lib/matplotlib/tests/test_category.py\n@@ -112,6 +112,14 @@ class TestStrCategoryConverter:\n             actual = self.cc.convert(data, self.unit, self.ax)\n         np.testing.assert_allclose(actual, np.array([1., 2., 3.]))\n \n+    def test_convert_empty_result_cannot_grow(self):\n+        data = np.empty((0, 2), dtype=object)\n+        actual = self.cc.convert(data, self.unit, self.ax)\n+\n+        assert actual.shape == (0, 2)\n+        assert actual.dtype == float\n+        with pytest.raises(ValueError):\n+            actual.resize((1, 2), refcheck=False)\n+\n     @pytest.mark.parametrize(\"fvals\", fvalues, ids=fids)\n     def test_convert_fail(self, fvals):\n         with pytest.raises(TypeError):\n",
+  "test_command": "python -m pytest -q lib/matplotlib/tests/test_category.py::TestStrCategoryConverter::test_convert_empty_result_cannot_grow"
+}

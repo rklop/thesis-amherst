@@ -1,0 +1,10 @@
+{
+  "test_name": "test_implemented_function_evalf_symbolic_result",
+  "specification_gap": "Evaluation must recurse not only into an implemented function's arguments, but also into a SymPy expression returned by its implementation, preserving the requested numerical precision.",
+  "input_description": "Create a unary implemented function whose implementation returns the exact SymPy constant pi, call it with 0, and request 40-digit evaluation.",
+  "expected_output": "The result equals pi.evalf(40), approximately 3.141592653589793238462643383279502884197. candidate_b evaluates the returned pi recursively; candidate_a attempts to pass the unevaluated constant directly to Float and therefore cannot produce the required result.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "The existing composition example only requires recursive argument evaluation, which both patches implement. Returning an exact numeric SymPy expression isolates the issue statement's separate requirement to call evalf recursively on the return value of _imp_.",
+  "test_patch": "diff --git a/sympy/core/tests/test_evalf.py b/sympy/core/tests/test_evalf.py\n--- a/sympy/core/tests/test_evalf.py\n+++ b/sympy/core/tests/test_evalf.py\n@@ -326,8 +326,15 @@ def test_implemented_function_evalf():\n     assert f(2).evalf() == 3\n     assert f(x).evalf() == f(x)\n     del f._imp_     # XXX: due to caching _imp_ would influence all other tests\n \n \n+def test_implemented_function_evalf_symbolic_result():\n+    from sympy.utilities.lambdify import implemented_function\n+    f = implemented_function('implemented_pi_result', lambda x: pi)\n+    assert f(0).evalf(40) == pi.evalf(40)\n+    del f._imp_\n+\n+\n def test_evaluate_false():\n     for no in [0, False]:\n         assert Add(3, 2, evaluate=no).is_Add\n",
+  "test_command": "cd /testbed && python -m pytest -q sympy/core/tests/test_evalf.py::test_implemented_function_evalf_symbolic_result"
+}

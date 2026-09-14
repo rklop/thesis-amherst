@@ -1,0 +1,55 @@
+diff --git a/django/utils/translation/trans_real.py b/django/utils/translation/trans_real.py
+index 7dcc77b46c..d4673b0e08 100644
+--- a/django/utils/translation/trans_real.py
++++ b/django/utils/translation/trans_real.py
+@@ -43,7 +43,7 @@ language_code_re = _lazy_re_compile(
+     re.IGNORECASE
+ )
+ 
+-language_code_prefix_re = _lazy_re_compile(r'^/(\w+([@-]\w+)?)(/|$)')
++language_code_prefix_re = _lazy_re_compile(r'^/(\w+([@-]\w+)*)(/|$)')
+ 
+ 
+ @receiver(setting_changed)
+@@ -509,6 +509,41 @@ def get_language_from_path(path, strict=False):
+     if not regex_match:
+         return None
+     lang_code = regex_match[1]
++    supported_languages = get_languages()
++    # If the lang_code is in LANGUAGES, try to return it (with fallback).
++    if lang_code in supported_languages:
++        try:
++            return get_supported_language_variant(lang_code, strict=strict)
++        except LookupError:
++            pass
++    # If the exact lang_code is not in LANGUAGES but contains a hyphen,
++    # only allow fallback for codes with at most 2 parts (e.g., en-gb, de-ch).
++    # For codes with 3+ parts (e.g., en-latn-us, de-ch-1901), only allow
++    # if the exact code is in LANGUAGES. This prevents page paths like
++    # /de-simple-page-test/ from incorrectly matching 'de'.
++    if '-' in lang_code:
++        parts = lang_code.split('-')
++        # For codes with 3+ parts, only allow if exact code is in LANGUAGES
++        if len(parts) >= 3:
++            if lang_code not in supported_languages:
++                return None
++        else:
++            # For codes with 2 parts, check for:
++            # 1. Valid prefix in LANGUAGES or LANG_INFO
++            # 2. Full code has a fallback in LANG_INFO
++            valid_prefix = False
++            for i in range(1, len(parts)):
++                prefix = '-'.join(parts[:i])
++                if prefix in supported_languages or prefix in LANG_INFO:
++                    valid_prefix = True
++                    break
++            # Also check if full code has a fallback
++            if not valid_prefix and lang_code in LANG_INFO:
++                if 'fallback' in LANG_INFO[lang_code]:
++                    valid_prefix = True
++            if not valid_prefix:
++                return None
++    # Try the fallback
+     try:
+         return get_supported_language_variant(lang_code, strict=strict)
+     except LookupError:

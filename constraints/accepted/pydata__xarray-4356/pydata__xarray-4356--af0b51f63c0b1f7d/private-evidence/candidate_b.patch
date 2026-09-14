@@ -1,0 +1,47 @@
+diff --git a/xarray/core/nanops.py b/xarray/core/nanops.py
+index 41c8d258..a2b353ad 100644
+--- a/xarray/core/nanops.py
++++ b/xarray/core/nanops.py
+@@ -26,19 +26,29 @@ def _maybe_null_out(result, axis, mask, min_count=1):
+     """
+     xarray version of pandas.core.nanops._maybe_null_out
+     """
+-    if hasattr(axis, "__len__"):  # if tuple or list
+-        raise ValueError(
+-            "min_count is not available for reduction with more than one dimensions."
+-        )
+-
+-    if axis is not None and getattr(result, "ndim", False):
+-        null_mask = (mask.shape[axis] - mask.sum(axis) - min_count) < 0
+-        if null_mask.any():
+-            dtype, fill_value = dtypes.maybe_promote(result.dtype)
+-            result = result.astype(dtype)
+-            result[null_mask] = fill_value
+-
+-    elif getattr(result, "dtype", None) not in dtypes.NAT_TYPES:
++
++    if axis is not None:
++        # Handle both single axis and multiple axes
++        if hasattr(axis, "__len__"):  # multiple axes
++            # For multi-axis reduction, compute total size across all axes
++            axis_size = np.take(mask.shape, axis).prod()
++        else:
++            # Single axis case
++            axis_size = mask.shape[axis]
++        
++        null_mask = (axis_size - mask.sum(axis) - min_count) < 0
++        
++        if getattr(result, "ndim", 0) > 0:
++            # Multi-dimensional result
++            if null_mask.any():
++                dtype, fill_value = dtypes.maybe_promote(result.dtype)
++                result = result.astype(dtype)
++                result[null_mask] = fill_value
++        elif null_mask.any():
++            # Scalar result (0-d array or Python scalar)
++            result = np.nan
++
++    elif hasattr(result, "dtype") and result.dtype not in dtypes.NAT_TYPES:
+         null_mask = mask.size - mask.sum()
+         if null_mask < min_count:
+             result = np.nan

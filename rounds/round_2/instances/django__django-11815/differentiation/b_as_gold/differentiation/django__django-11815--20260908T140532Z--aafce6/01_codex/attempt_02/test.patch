@@ -1,0 +1,33 @@
+diff --git a/tests/migrations/test_regex_flag_serialization.py b/tests/migrations/test_regex_flag_serialization.py
+new file mode 100644
+--- /dev/null
++++ b/tests/migrations/test_regex_flag_serialization.py
+@@ -0,0 +1,28 @@
++import re
++
++from django.db.migrations.utils import RegexObject
++from django.db.migrations.writer import MigrationWriter
++from django.test import SimpleTestCase
++
++
++class NamedRegexFlag(int):
++    @property
++    def name(self):
++        return re.RegexFlag(self).name
++
++    def __xor__(self, other):
++        return type(self)(super().__xor__(other))
++
++
++class RegexFlagSerializationTests(SimpleTestCase):
++    def test_named_integer_regex_flag(self):
++        regex = RegexObject(re.compile('^foo$', re.IGNORECASE))
++        regex.flags = NamedRegexFlag(regex.flags)
++
++        serialized, imports = MigrationWriter.serialize(regex)
++
++        self.assertEqual(
++            serialized, "re.compile('^foo$', re.RegexFlag['IGNORECASE'])"
++        )
++        self.assertEqual(imports, {'import re'})
++        self.assertEqual(eval(serialized, {'re': re}), regex)

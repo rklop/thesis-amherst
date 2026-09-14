@@ -1,0 +1,35 @@
+diff --git a/tests/utils_tests/test_autoreload.py b/tests/utils_tests/test_autoreload.py
+--- a/tests/utils_tests/test_autoreload.py
++++ b/tests/utils_tests/test_autoreload.py
+@@ -164,6 +164,31 @@ class TestChildArguments(SimpleTestCase):
+             autoreload.get_child_arguments(),
+             [sys.executable, '-m', 'django', 'runserver']
+         )
++
++    @mock.patch('sys.argv', [__file__, 'runserver'])
++    @mock.patch('sys.warnoptions', [])
++    def test_initial_main_module_determines_child_package(self):
++        launched_main = types.ModuleType('__main__')
++        launched_main.__spec__ = types.SimpleNamespace(parent='custom_cli')
++        replacement_main = types.ModuleType('__main__')
++        replacement_main.__spec__ = types.SimpleNamespace(parent='import_side_effect')
++        real_import = __import__
++
++        def import_with_replaced_main(name, globals=None, locals=None,
++                                      fromlist=(), level=0):
++            if name == 'django.__main__':
++                sys.modules['__main__'] = replacement_main
++            return real_import(name, globals, locals, fromlist, level)
++
++        with mock.patch.dict(
++            sys.modules, {'__main__': launched_main}
++        ), mock.patch(
++            'builtins.__import__', side_effect=import_with_replaced_main
++        ):
++            self.assertEqual(
++                autoreload.get_child_arguments(),
++                [sys.executable, '-m', 'custom_cli', 'runserver']
++            )
+ 
+     @mock.patch('sys.argv', [__file__, 'runserver'])
+     @mock.patch('sys.warnoptions', ['error'])

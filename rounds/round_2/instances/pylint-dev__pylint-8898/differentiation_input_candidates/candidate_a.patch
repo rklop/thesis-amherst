@@ -1,0 +1,65 @@
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 30a5fd175..fa93f8698 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -111,10 +111,59 @@ def _regex_transformer(value: str) -> Pattern[str]:
+         raise argparse.ArgumentTypeError(msg) from e
+ 
+ 
++def _regexp_csv_split(value: str) -> list[str]:
++    """Split a comma-separated string of regular expressions, respecting
++    commas inside regex quantifiers like {m,n}.
++    """
++    patterns: list[str] = []
++    current: list[str] = []
++    in_character_class = False
++    brace_depth = 0
++    i = 0
++
++    while i < len(value):
++        char = value[i]
++
++        # Handle escaped characters
++        if char == "\\" and i + 1 < len(value):
++            current.append(char)
++            current.append(value[i + 1])
++            i += 2
++            continue
++
++        # Track character classes [...], ignoring commas inside
++        if char == "[":
++            in_character_class = True
++        elif char == "]" and in_character_class:
++            in_character_class = False
++        elif char == "{" and not in_character_class:
++            brace_depth += 1
++        elif char == "}" and not in_character_class and brace_depth > 0:
++            brace_depth -= 1
++
++        # Split on comma only if not in character class and not inside braces
++        if char == "," and not in_character_class and brace_depth == 0:
++            pattern = "".join(current).strip()
++            if pattern:
++                patterns.append(pattern)
++            current = []
++        else:
++            current.append(char)
++
++        i += 1
++
++    # Add the last pattern
++    pattern = "".join(current).strip()
++    if pattern:
++        patterns.append(pattern)
++
++    return patterns
++
++
+ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
+     """Transforms a comma separated list of regular expressions."""
+     patterns: list[Pattern[str]] = []
+-    for pattern in _csv_transformer(value):
++    for pattern in _regexp_csv_split(value):
+         patterns.append(_regex_transformer(pattern))
+     return patterns
+ 

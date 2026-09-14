@@ -1,0 +1,45 @@
+diff --git a/tests/queries/tests.py b/tests/queries/tests.py
+--- a/tests/queries/tests.py
++++ b/tests/queries/tests.py
+@@ -15,7 +15,7 @@ from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+ from django.test.utils import CaptureQueriesContext
+ 
+ from .models import (
+-    FK1, Annotation, Article, Author, BaseA, Book, CategoryItem,
++    FK1, Annotation, Article, Author, BaseA, BaseUser, Book, CategoryItem,
+     CategoryRelationship, Celebrity, Channel, Chapter, Child, ChildObjectA,
+     Classroom, CommonMixedCaseForeignKeys, Company, Cover, CustomPk,
+     CustomPkTag, DateTimePK, Detail, DumbCategory, Eaten, Employment,
+@@ -2095,6 +2095,32 @@ class QuerySetBitwiseOperationTests(TestCase):
+         cls.room_3 = Classroom.objects.create(school=cls.school, has_blackboard=True, name='Room 3')
+         cls.room_4 = Classroom.objects.create(school=cls.school, has_blackboard=False, name='Room 4')
+ 
++    def test_or_with_multichar_alias_prefix(self):
++        staff = Staff.objects.create(name='staff')
++        staff_user = StaffUser.objects.create(staff=staff)
++        other_user = BaseUser.objects.create()
++        Task.objects.create(
++            title='task',
++            owner=other_user,
++            creator=staff_user,
++        )
++        subquery = BaseUser.objects.filter(pk=staff_user.pk)
++
++        # Alias prefixes become multi-character after the one-letter prefixes
++        # are exhausted.
++        queryset = BaseUser.objects.all()
++        queryset.query.alias_prefix = 'AA'
++        lhs = queryset.filter(staffuser__staff=staff)
++        rhs = queryset.filter(
++            Q(owner__creator__in=subquery) |
++            Q(creator__owner__in=subquery)
++        )
++
++        self.assertCountEqual(
++            (lhs | rhs).values_list('pk', flat=True),
++            [staff_user.pk, other_user.pk],
++        )
++
+     @skipUnlessDBFeature('allow_sliced_subqueries_with_in')
+     def test_or_with_rhs_slice(self):
+         qs1 = Classroom.objects.filter(has_blackboard=True)

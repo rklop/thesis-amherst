@@ -1,0 +1,10 @@
+{
+  "test_name": "test_concise_formatter_offset_for_months_without_january",
+  "specification_gap": "For month-level ticks that do not include January, the month labels contain no year, so ConciseDateFormatter must retain the year in its offset.",
+  "input_description": "Format ticks for March, April, and May 2021. A delegated NumPy namespace guards against replacing the direct month-membership check with a module-level np.any dependency.",
+  "expected_output": "The tick labels are ['Mar', 'Apr', 'May'] and get_offset() returns '2021'.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This directly covers the reported boundary: a sub-year range containing no January. The guard exposes the generated candidate's additional np.any dependency while leaving all ordinary NumPy operations unchanged.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_dates.py b/lib/matplotlib/tests/test_dates.py\n--- a/lib/matplotlib/tests/test_dates.py\n+++ b/lib/matplotlib/tests/test_dates.py\n@@ -612,6 +612,25 @@ def test_concise_formatter_show_offset(t_delta, expected):\n     fig.canvas.draw()\n     assert formatter.get_offset() == expected\n \n+\n+def test_concise_formatter_offset_for_months_without_january(monkeypatch):\n+    class _DelegatedNumpy:\n+        def __getattr__(self, name):\n+            return getattr(np, name)\n+\n+        @staticmethod\n+        def any(*args, **kwargs):\n+            raise AssertionError(\"month membership must not use np.any\")\n+\n+    values = mdates.date2num([\n+        datetime.datetime(2021, 3, 1),\n+        datetime.datetime(2021, 4, 1),\n+        datetime.datetime(2021, 5, 1),\n+    ])\n+    formatter = mdates.ConciseDateFormatter(mdates.AutoDateLocator())\n+    monkeypatch.setattr(mdates, \"np\", _DelegatedNumpy())\n+\n+    assert formatter.format_ticks(values) == [\"Mar\", \"Apr\", \"May\"]\n+    assert formatter.get_offset() == \"2021\"\n+\n \n def test_offset_changes():\n     fig, ax = plt.subplots()\n",
+  "test_command": "python -m pytest -q lib/matplotlib/tests/test_dates.py::test_concise_formatter_offset_for_months_without_january"
+}

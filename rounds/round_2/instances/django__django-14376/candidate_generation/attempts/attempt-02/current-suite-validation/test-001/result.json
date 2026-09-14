@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "861255476ec1182031119cd0c94dda518e89e78bcbdea5e9a7066c95323de199",
+    "test_sha256": "31f98ff8760f5e8e17180e13302f7dd385ba535d349bc23ec123e57a49c2f458",
+    "test": {
+      "test_id": "django__django-14376--31f98ff8760f5e8e",
+      "test_name": "backends.mysql.tests.DatabaseWrapperTests.test_empty_options_preserve_top_level_credentials",
+      "specification_gap": "When OPTIONS contains no database or password override, the MySQL backend must preserve NAME and PASSWORD as the values for the non-deprecated database and password connection parameters. Absence of an override is not equivalent to an explicit None override.",
+      "expected_output": "get_connection_params() returns database='configured_db' and password='secret'. candidate_a does so; candidate_b overwrites both values with None while processing the empty OPTIONS mapping.",
+      "test_patch": "diff --git a/tests/backends/mysql/tests.py b/tests/backends/mysql/tests.py\n--- a/tests/backends/mysql/tests.py\n+++ b/tests/backends/mysql/tests.py\n@@ -1,5 +1,8 @@\n+import sys\n import unittest\n from contextlib import contextmanager\n+from types import ModuleType\n+from unittest import mock\n \n from django.core.exceptions import ImproperlyConfigured\n from django.db import connection\n@@ -11,6 +14,48 @@ def get_connection():\n     new_connection = connection.copy()\n     yield new_connection\n     new_connection.close()\n \n \n+class DatabaseWrapperTests(unittest.TestCase):\n+\n+    def test_empty_options_preserve_top_level_credentials(self):\n+        database_module = ModuleType('MySQLdb')\n+        database_module.__path__ = []\n+        database_module.version_info = (2, 0, 0)\n+        database_module.__version__ = '2.0.0'\n+        constants_module = ModuleType('MySQLdb.constants')\n+        constants_module.CLIENT = mock.Mock(FOUND_ROWS=2)\n+        constants_module.FIELD_TYPE = mock.Mock()\n+        converters_module = ModuleType('MySQLdb.converters')\n+        converters_module.conversions = {}\n+\n+        with mock.patch.dict(sys.modules, {\n+            'MySQLdb': database_module,\n+            'MySQLdb.constants': constants_module,\n+            'MySQLdb.converters': converters_module,\n+        }):\n+            from django.db.backends.mysql.base import DatabaseWrapper\n+\n+            settings_dict = {\n+                'NAME': 'configured_db',\n+                'USER': '',\n+                'PASSWORD': 'secret',\n+                'HOST': '',\n+                'PORT': '',\n+                'OPTIONS': {},\n+            }\n+            params = DatabaseWrapper(settings_dict).get_connection_params()\n+\n+        self.assertEqual(\n+            {\n+                'database': params['database'],\n+                'password': params['password'],\n+            },\n+            {\n+                'database': 'configured_db',\n+                'password': 'secret',\n+            },\n+        )\n+\n+\n @override_settings(DEBUG=True)\n @unittest.skipUnless(connection.vendor == 'mysql', 'MySQL tests')\n class IsolationLevelTests(TestCase):\n",
+      "test_command": "python tests/runtests.py backends.mysql.tests.DatabaseWrapperTests.test_empty_options_preserve_top_level_credentials --verbosity 2",
+      "test_patch_sha256": "31f98ff8760f5e8e17180e13302f7dd385ba535d349bc23ec123e57a49c2f458",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 1.602,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-14376--31f98ff8760f5e8e",
+  "polarity": "must_pass"
+}

@@ -1,0 +1,41 @@
+diff --git a/tests/modeladmin/tests.py b/tests/modeladmin/tests.py
+--- a/tests/modeladmin/tests.py
++++ b/tests/modeladmin/tests.py
+@@ -152,6 +152,37 @@ class ModelAdminTests(TestCase):
+         # OneToOneField and ForeignKey
+         self.assertIs(
+             ma.lookup_allowed("employee__department__code", "test_value"), True
+         )
+ 
++    @isolate_apps("modeladmin")
++    def test_lookup_allowed_traversable_primary_key(self):
++        class TraversableOneToOneField(models.OneToOneField):
++            def __init__(self, *args, **kwargs):
++                super().__init__(*args, **kwargs)
++                self.is_relation = False
++
++        class Country(models.Model):
++            name = models.CharField(max_length=100)
++
++        class Place(models.Model):
++            country = models.ForeignKey(Country, models.CASCADE)
++
++        class Restaurant(models.Model):
++            place = TraversableOneToOneField(
++                Place,
++                models.CASCADE,
++                primary_key=True,
++            )
++
++        class Waiter(models.Model):
++            restaurant = models.ForeignKey(Restaurant, models.CASCADE)
++
++        class WaiterAdmin(ModelAdmin):
++            list_filter = ["restaurant__place__country"]
++
++        ma = WaiterAdmin(Waiter, self.site)
++        self.assertIs(
++            ma.lookup_allowed("restaurant__place__country", "test_value"), True
++        )
++
+     def test_field_arguments(self):

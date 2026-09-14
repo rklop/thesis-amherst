@@ -1,0 +1,45 @@
+diff --git a/tests/model_forms/tests.py b/tests/model_forms/tests.py
+--- a/tests/model_forms/tests.py
++++ b/tests/model_forms/tests.py
+@@ -191,13 +191,39 @@ class ModelFormBaseTest(TestCase):
+     def test_empty_fields_on_modelform(self):
+         """
+         No fields on a ModelForm should actually result in no fields.
+         """
+         class EmptyPersonForm(forms.ModelForm):
+             class Meta:
+                 model = Person
+                 fields = ()
+ 
+         form = EmptyPersonForm()
+         self.assertEqual(len(form.fields), 0)
+ 
++    def test_empty_fields_do_not_save_declared_many_to_many_field(self):
++        """
++        ModelForm.save() doesn't save fields omitted by an empty Meta.fields.
++        """
++        class EmptyItemForm(forms.ModelForm):
++            colours = forms.ModelMultipleChoiceField(Colour.objects.all())
++
++            class Meta:
++                model = ColourfulItem
++                fields = []
++
++        old_colour = Colour.objects.create(name='Old')
++        new_colour = Colour.objects.create(name='New')
++        item = ColourfulItem.objects.create(name='Item')
++        item.colours.add(old_colour)
++
++        form = EmptyItemForm(
++            {'colours': [new_colour.pk]}, instance=item,
++        )
++        self.assertTrue(form.is_valid())
++        form.save()
++        self.assertEqual(
++            list(item.colours.values_list('pk', flat=True)),
++            [old_colour.pk],
++        )
++
+     def test_empty_fields_to_construct_instance(self):
+         """
+         No fields should be set on a model instance if construct_instance receives fields=().

@@ -1,0 +1,27 @@
+diff --git a/tests/queries/tests.py b/tests/queries/tests.py
+--- a/tests/queries/tests.py
++++ b/tests/queries/tests.py
+@@ -1327,6 +1327,22 @@ class Queries4Tests(TestCase):
+     def test_combine_or_filter_reuse(self):
+         combined = Author.objects.filter(name='a1') | Author.objects.filter(name='a3')
+         self.assertEqual(combined.get(name='a1'), self.a1)
+ 
++    def test_combine_or_then_deeper_self_relation(self):
++        root = Tag.objects.create(name='root')
++        level1 = Tag.objects.create(name='level1', parent=root)
++        level2 = Tag.objects.create(name='level2', parent=level1)
++        level3 = Tag.objects.create(name='level3', parent=level2)
++        leaf = Tag.objects.create(name='leaf', parent=level3)
++
++        combined = (
++            Tag.objects.filter(parent__name='level3') |
++            Tag.objects.filter(parent__parent__parent__name='level1')
++        )
++        filtered = combined.filter(
++            parent__parent__parent__parent__name='root',
++        )
++        self.assertSequenceEqual(filtered, [leaf])
++
+     def test_join_reuse_order(self):
+         # Join aliases are reused in order. This shouldn't raise AssertionError
+         # because change_map contains a circular reference (#26522).

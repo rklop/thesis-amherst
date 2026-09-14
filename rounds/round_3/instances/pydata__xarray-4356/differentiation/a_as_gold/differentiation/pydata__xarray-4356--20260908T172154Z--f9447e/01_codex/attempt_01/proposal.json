@@ -1,0 +1,10 @@
+{
+  "test_name": "test_sum_min_count_multiple_dims_with_units",
+  "specification_gap": "Multi-dimensional min_count reductions must preserve xarray's generic duck-array behavior when unreduced dimensions remain; a non-NumPy array result is not necessarily scalar.",
+  "input_description": "A unit-aware 2\u00d72\u00d72 DataArray is summed over dimensions x and y with skipna=True and min_count=2. The first z slice has one valid value, while the second has three valid values summing to 7 meters.",
+  "expected_output": "A one-dimensional DataArray over z with meter units and values [NaN, 7.0].",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This supported public type variant exercises a partial multi-axis reduction. Candidate B treats the unit-aware vector result as a scalar and evaluates its two-element null mask as one boolean, raising an ambiguous-truth-value error; candidate A retains the generic array masking behavior.",
+  "test_patch": "diff --git a/xarray/tests/test_units.py b/xarray/tests/test_units.py\n--- a/xarray/tests/test_units.py\n+++ b/xarray/tests/test_units.py\n@@ -2375,6 +2375,24 @@ class TestDataArray:\n         assert_units_equal(expected, actual)\n         assert_allclose(expected, actual)\n \n+    def test_sum_min_count_multiple_dims_with_units(self):\n+        values = np.array(\n+            [\n+                [[1.0, 1.0], [np.nan, 2.0]],\n+                [[np.nan, np.nan], [np.nan, 4.0]],\n+            ]\n+        )\n+        data_array = xr.DataArray(\n+            values * unit_registry.m, dims=(\"x\", \"y\", \"z\")\n+        )\n+\n+        actual = data_array.sum(dim=(\"x\", \"y\"), skipna=True, min_count=2)\n+        expected = xr.DataArray(\n+            np.array([np.nan, 7.0]) * unit_registry.m, dims=\"z\"\n+        )\n+\n+        assert_units_equal(expected, actual)\n+        assert_allclose(expected, actual)\n+\n     @pytest.mark.parametrize(\n         \"func\",\n         (\n",
+  "test_command": "cd /testbed && pytest -q xarray/tests/test_units.py::TestDataArray::test_sum_min_count_multiple_dims_with_units"
+}

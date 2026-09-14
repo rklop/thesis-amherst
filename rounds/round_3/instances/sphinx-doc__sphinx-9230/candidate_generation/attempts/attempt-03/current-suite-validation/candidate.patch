@@ -1,0 +1,87 @@
+diff --git a/sphinx/util/docfields.py b/sphinx/util/docfields.py
+index 3a3367ebe..7ed1ee155 100644
+--- a/sphinx/util/docfields.py
++++ b/sphinx/util/docfields.py
+@@ -22,6 +22,68 @@ if TYPE_CHECKING:
+     from sphinx.directive import ObjectDescription
+ 
+ 
++
++def _split_type_and_name(fieldarg: str) -> Tuple[str, str]:
++    """Split a field argument like "type name" into type and name parts.
++    
++    This properly handles brackets in types like dict(str, str) or List[int].
++    The name is always the last whitespace-separated token at the top level
++    (not inside brackets).
++    """
++    # Find the position of the last whitespace-separated token
++    # that is not inside brackets (but ignoring brackets inside quotes)
++    in_string = False
++    string_char = None
++    bracket_depth = 0
++    last_space_pos = -1
++    
++    i = 0
++    while i < len(fieldarg):
++        c = fieldarg[i]
++        
++        # Handle string literals (both " and ')
++        if c in ('"', "'"):
++            if i > 0 and fieldarg[i - 1] == '\\':
++                pass  # Skip escaped quote
++            elif not in_string:
++                in_string = True
++                string_char = c
++            elif c == string_char:
++                in_string = False
++                string_char = None
++        elif not in_string:
++            if c in '([{':
++                bracket_depth += 1
++            elif c in ')]}':
++                bracket_depth -= 1
++            elif c.isspace() and bracket_depth == 0:
++                last_space_pos = i
++        
++        i += 1
++    
++    if last_space_pos == -1:
++        # No space found at top level
++        # Check if entire thing is wrapped in parens (like "(x, y)")
++        fieldarg_stripped = fieldarg.strip()
++        if fieldarg_stripped.startswith('(') and fieldarg_stripped.endswith(')'):
++            # Check if balanced
++            bracket_depth = 0
++            for c in fieldarg_stripped:
++                if c == '(':
++                    bracket_depth += 1
++                elif c == ')':
++                    bracket_depth -= 1
++            if bracket_depth == 0:
++                # Entire thing is just parens, treat as name (no type)
++                return '', fieldarg
++        
++        # No space found, treat entire thing as name
++        return '', fieldarg
++    
++    argtype = fieldarg[:last_space_pos].strip()
++    argname = fieldarg[last_space_pos:].strip()
++    return argtype, argname
++
+ def _is_single_paragraph(node: nodes.field_body) -> bool:
+     """True if the node only contains one paragraph (and system messages)."""
+     if len(node) == 0:
+@@ -297,11 +359,8 @@ class DocFieldTransformer:
+ 
+             # also support syntax like ``:param type name:``
+             if typedesc.is_typed:
+-                try:
+-                    argtype, argname = fieldarg.split(None, 1)
+-                except ValueError:
+-                    pass
+-                else:
++                argtype, argname = _split_type_and_name(fieldarg)
++                if argtype:
+                     types.setdefault(typename, {})[argname] = \
+                         [nodes.Text(argtype)]
+                     fieldarg = argname

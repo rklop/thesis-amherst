@@ -1,0 +1,10 @@
+{
+  "test_name": "test_none_body_capability_probe",
+  "specification_gap": "Removing the default zero length must not otherwise change the established body-capability detection path used while preparing a bodyless request.",
+  "input_description": "Prepare a GET request with its default absent body (None) while recording file-like capability checks performed by requests.models.",
+  "expected_output": "The prepared request has no Content-Length header, while the existing seek-capability check for the absent body remains observable. candidate_b fails because its new outer None guard skips that check.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This isolates the only runtime control-flow disagreement between the patches while also checking the issue\u2019s required externally visible header behavior through the public Request.prepare entry point.",
+  "test_patch": "diff --git a/test_content_length_regression.py b/test_content_length_regression.py\nnew file mode 100644\n--- /dev/null\n+++ b/test_content_length_regression.py\n@@ -0,0 +1,20 @@\n+import requests\n+import requests.models as models\n+\n+\n+def test_none_body_capability_probe():\n+    probes = []\n+    real_hasattr = hasattr\n+\n+    def recording_hasattr(value, name):\n+        probes.append((value, name))\n+        return real_hasattr(value, name)\n+\n+    models.hasattr = recording_hasattr\n+    try:\n+        prepared = requests.Request('GET', 'http://example.test/').prepare()\n+    finally:\n+        del models.hasattr\n+\n+    assert 'Content-Length' not in prepared.headers\n+    assert (None, 'seek') in probes\n",
+  "test_command": "cd /testbed && pytest -q test_content_length_regression.py"
+}

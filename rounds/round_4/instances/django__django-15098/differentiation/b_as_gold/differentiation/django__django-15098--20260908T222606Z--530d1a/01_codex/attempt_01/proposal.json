@@ -1,0 +1,10 @@
+{
+  "test_name": "test_get_language_from_path_special_fallback",
+  "specification_gap": "Path-based language detection must preserve LANG_INFO special fallbacks before considering generic sibling variants. Resolving a specific alias such as zh-cn must not depend on the ordering of other configured zh variants.",
+  "input_description": "Call get_language_from_path('/zh-cn/') with LANGUAGES containing zh, then zh-hant, then zh-hans. Django has no generic zh catalog, while zh-cn has the established special fallback zh-hans.",
+  "expected_output": "The function returns 'zh-hans'. The supplied gold follows the zh-cn special fallback. The generated candidate first truncates to zh and incorrectly selects the first configured sibling, zh-hant.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This checks an existing language-resolution invariant through the path entry point affected by the issue. It is a boundary case involving a generic language plus multiple script variants, and detects a regression that ordinary language-script-region success cases miss.",
+  "test_patch": "diff --git a/tests/i18n/tests.py b/tests/i18n/tests.py\n--- a/tests/i18n/tests.py\n+++ b/tests/i18n/tests.py\n@@ -1610,6 +1610,16 @@ class MiscTests(SimpleTestCase):\n         self.assertEqual(g('/de-ch/'), 'de')\n         self.assertIsNone(g('/de-simple-page/'))\n \n+    @override_settings(\n+        LANGUAGES=[\n+            ('zh', 'Chinese'),\n+            ('zh-hant', 'Traditional Chinese'),\n+            ('zh-hans', 'Simplified Chinese'),\n+        ],\n+    )\n+    def test_get_language_from_path_special_fallback(self):\n+        self.assertEqual(trans_real.get_language_from_path('/zh-cn/'), 'zh-hans')\n+\n     def test_get_language_from_path_null(self):\n         g = trans_null.get_language_from_path\n         self.assertIsNone(g('/pl/'))\n",
+  "test_command": "cd /testbed && ./tests/runtests.py i18n.tests.MiscTests.test_get_language_from_path_special_fallback"
+}

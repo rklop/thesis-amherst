@@ -1,0 +1,43 @@
+diff --git a/tests/forms_tests/tests/test_forms.py b/tests/forms_tests/tests/test_forms.py
+--- a/tests/forms_tests/tests/test_forms.py
++++ b/tests/forms_tests/tests/test_forms.py
+@@ -14,5 +14,6 @@ from django.forms import (
+     RadioSelect, Select, SplitDateTimeField, SplitHiddenDateTimeWidget,
+     Textarea, TextInput, TimeField, ValidationError, forms,
+ )
++from django.forms.boundfield import BoundField
+ from django.forms.renderers import DjangoTemplates, get_default_renderer
+ from django.forms.utils import ErrorList
+@@ -2069,12 +2070,30 @@ class FormsTestCase(SimpleTestCase):
+     def test_custom_boundfield(self):
+         class CustomField(CharField):
+             def get_bound_field(self, form, name):
+                 return (form, name)
+ 
+         class SampleForm(Form):
+             name = CustomField()
+ 
+         f = SampleForm()
+         self.assertEqual(f['name'], (f, 'name'))
+ 
++    def test_custom_boundfield_data_used_by_form(self):
++        class NormalizingBoundField(BoundField):
++            @property
++            def data(self):
++                return super().data.upper()
++
++        class NormalizingCharField(CharField):
++            def get_bound_field(self, form, name):
++                return NormalizingBoundField(form, self, name)
++
++        class SampleForm(Form):
++            name = NormalizingCharField(initial='ALICE')
++
++        form = SampleForm({'name': 'alice'})
++        self.assertTrue(form.is_valid())
++        self.assertEqual(form.cleaned_data, {'name': 'ALICE'})
++        self.assertEqual(form.changed_data, [])
++
+     def test_initial_datetime_values(self):
+         now = datetime.datetime.now()
+         # Nix microseconds (since they should be ignored). #22502

@@ -1,0 +1,10 @@
+{
+  "test_name": "test_extract_iso_year_lookup_includes_final_sunday",
+  "specification_gap": "For a DateTimeField, an __iso_year lookup must include the entire final Sunday of the requested ISO year, not only midnight at the start of that day.",
+  "input_description": "Create a DTModel whose start_datetime is 2016-01-03 13:00. Although its calendar year is 2016, this Sunday belongs to ISO year 2015. Filter with start_datetime__iso_year=2015.",
+  "expected_output": "The filtered values contain the stored datetime 2016-01-03 13:00. candidate_a uses an inclusive upper bound at 23:59:59.999999 on the final Sunday; candidate_b ends its bound at 00:00 that Sunday and therefore omits the row.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises the public DateTimeField lookup at the precise upper boundary where the patches disagree. It establishes the narrow invariant that every time on the final ISO-year day belongs to that ISO year, rather than asserting SQL structure or backend internals.",
+  "test_patch": "diff --git a/tests/db_functions/datetime/test_extract_trunc.py b/tests/db_functions/datetime/test_extract_trunc.py\n--- a/tests/db_functions/datetime/test_extract_trunc.py\n+++ b/tests/db_functions/datetime/test_extract_trunc.py\n@@ -370,6 +370,14 @@ class DateFunctionTests(TestCase):\n             (week_1_day_2014_2015, 2015),\n             (week_53_day_2015, 2015),\n         ], lambda m: (m.start_datetime, m.extracted))\n+\n+    def test_extract_iso_year_lookup_includes_final_sunday(self):\n+        final_sunday = datetime(2016, 1, 3, 13, 0)\n+        self.create_model(final_sunday, final_sunday)\n+        self.assertSequenceEqual(\n+            list(DTModel.objects.filter(start_datetime__iso_year=2015).values_list(\n+                'start_datetime', flat=True,\n+            )),\n+            [final_sunday],\n+        )\n \n     def test_extract_month_func(self):\n         start_datetime = datetime(2015, 6, 15, 14, 30, 50, 321)\n",
+  "test_command": "python tests/runtests.py db_functions.datetime.test_extract_trunc.DateFunctionTests.test_extract_iso_year_lookup_includes_final_sunday"
+}

@@ -1,0 +1,107 @@
+diff --git a/sympy/codegen/ast.py b/sympy/codegen/ast.py
+index a02714b174..6ef29c429b 100644
+--- a/sympy/codegen/ast.py
++++ b/sympy/codegen/ast.py
+@@ -160,6 +160,41 @@ def _mk_Tuple(args):
+     return Tuple(*args)
+ 
+ 
++class _StringTextWrapper(Basic):
++    """Internal wrapper for string values in Token args.
++    
++    This wrapper ensures that string values in Token args are Basic-compatible,
++    which is required for methods like replace() to work correctly.
++    """
++    __slots__ = ('_value',)
++    
++    def __new__(cls, value):
++        obj = Basic.__new__(cls)
++        obj._value = value
++        return obj
++    
++    @property
++    def text(self):
++        return self._value
++    
++    def __str__(self):
++        return self._value
++    
++    def __repr__(self):
++        return '_StringTextWrapper(%r)' % self._value
++    
++    def _hashable_content(self):
++        return (self._value,)
++    
++    def __eq__(self, other):
++        if isinstance(other, _StringTextWrapper):
++            return self._value == other._value
++        return False
++    
++    def __hash__(self):
++        return hash((_StringTextWrapper, self._value))
++
++
+ class CodegenAST(Basic):
+     pass
+ 
+@@ -242,14 +277,28 @@ def __new__(cls, *args, **kwargs):
+             raise ValueError("Unknown keyword arguments: %s" % ' '.join(kwargs))
+ 
+         # Parent constructor
++        # Wrap non-Basic values in args to make them Basic-compatible
++        from sympy.core.basic import Basic
++        wrapped_attrvals = []
++        for attr, val in zip(cls.__slots__, attrvals):
++            if attr in cls.not_in_args:
++                wrapped_attrvals.append(val)
++            elif isinstance(val, Basic):
++                wrapped_attrvals.append(val)
++            elif isinstance(val, str):
++                # Wrap string values in a wrapper class
++                wrapped_attrvals.append(_StringTextWrapper(val))
++            else:
++                wrapped_attrvals.append(val)
++        
+         basic_args = [
+-            val for attr, val in zip(cls.__slots__, attrvals)
++            val for attr, val in zip(cls.__slots__, wrapped_attrvals)
+             if attr not in cls.not_in_args
+         ]
+         obj = CodegenAST.__new__(cls, *basic_args)
+ 
+-        # Set attributes
+-        for attr, arg in zip(cls.__slots__, attrvals):
++        # Set attributes using wrapped values
++        for attr, arg in zip(cls.__slots__, wrapped_attrvals):
+             setattr(obj, attr, arg)
+ 
+         return obj
+@@ -895,15 +944,27 @@ class String(Token):
+ 
+     """
+     __slots__ = ('text',)
+-    not_in_args = ['text']
++    not_in_args = []
+     is_Atom = True
+ 
+     @classmethod
+     def _construct_text(cls, text):
++        # Accept both plain strings and _StringTextWrapper objects
++        if isinstance(text, _StringTextWrapper):
++            return text
+         if not isinstance(text, str):
+             raise TypeError("Argument text is not a string type.")
+         return text
+ 
++    def __getattribute__(self, name):
++        # Unwrap _StringTextWrapper when accessing 'text' attribute
++        if name == 'text':
++            text_val = super().__getattribute__('text')
++            if isinstance(text_val, _StringTextWrapper):
++                return text_val.text
++            return text_val
++        return super().__getattribute__(name)
++
+     def _sympystr(self, printer, *args, **kwargs):
+         return self.text
+ 

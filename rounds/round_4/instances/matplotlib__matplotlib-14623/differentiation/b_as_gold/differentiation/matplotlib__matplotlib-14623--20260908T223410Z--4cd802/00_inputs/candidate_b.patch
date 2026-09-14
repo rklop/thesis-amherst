@@ -1,0 +1,74 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 209a3f92c..d89d2e2bb 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2379,9 +2379,37 @@ class LogLocator(Locator):
+         if not np.isfinite(vmin) or not np.isfinite(vmax):
+             return 1, 10  # initial range, no data plotted yet
+ 
+-        if vmin > vmax:
++        # If both vmin and vmax are positive, preserve the original ordering
++        # (which may be inverted). Only swap if needed to fix non-positive values.
++        # Use try/except to handle custom types that might raise on comparison with 0.
++        vmin_pos = False
++        vmax_pos = False
++        try:
++            if vmin > 0:
++                vmin_pos = True
++        except TypeError:
++            # If comparison fails, assume positive to preserve order
++            vmin_pos = True
++        try:
++            if vmax > 0:
++                vmax_pos = True
++        except TypeError:
++            # If comparison fails, assume positive to preserve order
++            vmax_pos = True
++
++        if vmin_pos and vmax_pos:
++            # Both positive - preserve order (may be inverted)
++            pass
++        elif vmin_pos and not vmax_pos:
++            # vmax is non-positive: swap to make vmin non-positive too, 
++            # then both will be fixed to minpos
+             vmin, vmax = vmax, vmin
+-        if vmax <= 0:
++        elif not vmin_pos and vmax_pos:
++            # vmin is non-positive, vmax is positive:
++            # don't swap - we'll fix vmin to minpos
++            pass
++        else:
++            # Both non-positive
+             cbook._warn_external(
+                 "Data has no positive values, and therefore cannot be "
+                 "log-scaled.")
+@@ -2390,11 +2418,28 @@ class LogLocator(Locator):
+         minpos = self.axis.get_minpos()
+         if not np.isfinite(minpos):
+             minpos = 1e-300  # This should never take effect.
++            
++        # Fix non-positive values to minpos
+         if vmin <= 0:
+             vmin = minpos
+-        if vmin == vmax:
++        if vmax <= 0:
++            vmax = minpos
++            
++        # Check for singular (equal) values using try/except to handle custom types
++        try:
++            vmin_equal_vmax = (vmin == vmax)
++        except TypeError:
++            vmin_equal_vmax = False
++        singular_expanded = False
++        if vmin_equal_vmax:
+             vmin = _decade_less(vmin, self._base)
+             vmax = _decade_greater(vmax, self._base)
++            singular_expanded = True
++
++        # Restore inversion if singular expansion happened
++        if singular_expanded:
++            vmin, vmax = vmax, vmin
++
+         return vmin, vmax
+ 
+ 

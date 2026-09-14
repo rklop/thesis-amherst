@@ -1,0 +1,48 @@
+diff --git a/sympy/sets/handlers/intersection.py b/sympy/sets/handlers/intersection.py
+index c54dc8f72a..cc6bf750b8 100644
+--- a/sympy/sets/handlers/intersection.py
++++ b/sympy/sets/handlers/intersection.py
+@@ -304,21 +304,29 @@ def intersection_sets(self, other): # noqa:F811
+             return None
+         else:
+             # univarite imaginary part in same variable
+-            x, xis = zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols])
+-            if x and all(i == n for i in x):
+-                base_set -= FiniteSet(xis)
++            # Solve im = 0 to find where the imaginary part vanishes
++            from sympy.solvers.solveset import solveset
++            zero_solns = solveset(im, n, domain=base_set)
++            
++            # Handle denominator exclusions
++            denoms_to_exclude = S.EmptySet
++            for i in denoms(f):
++                if i.has(n):
++                    denom_solns = solveset(i, n, domain=base_set)
++                    denoms_to_exclude |= denom_solns
++            
++            # Get valid points where im=0 and denom != 0
++            valid_points = zero_solns - denoms_to_exclude
++            
++            if isinstance(valid_points, FiniteSet) and valid_points:
++                # Evaluate re at each valid point
++                return FiniteSet(*[re.subs(n, xi) for xi in valid_points])
++            elif valid_points is S.EmptySet:
++                return S.EmptySet
+             else:
+-                base_set -= ConditionSet(n, Eq(im, 0), S.Integers)
+-        # exclude values that make denominators 0
+-        for i in denoms(f):
+-            if i.has(n):
+-                sol = list(zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols]))
+-                if sol != []:
+-                    x, xis = sol
+-                    if x and all(i == n for i in x):
+-                        base_set -= FiniteSet(xis)
+-                else:
+-                    base_set -= ConditionSet(n, Eq(i, 0), S.Integers)
++                # Return imageset of re over valid points
++                return imageset(lam, valid_points)
++        # Return for cases when im.is_zero is True (falls through to here)
+         return imageset(lam, base_set)
+ 
+     elif isinstance(other, Interval):

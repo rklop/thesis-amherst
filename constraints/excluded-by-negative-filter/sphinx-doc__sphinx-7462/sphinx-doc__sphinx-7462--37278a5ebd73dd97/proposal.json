@@ -1,0 +1,10 @@
+{
+  "test_name": "test_unparse_deferred_ast_kind",
+  "specification_gap": "When reading a lazy AST node's empty `elts` materializes it as a non-tuple node, `unparse` should render the materialized node kind rather than committing to the earlier tuple view.",
+  "input_description": "Pass `sphinx.pycode.ast.unparse` an `ast.AST` subclass that initially identifies as an empty tuple, then identifies as a Constant with value `frozenset()` after its `elts` property is read.",
+  "expected_output": "`unparse` returns `frozenset()`. Candidate_b re-evaluates the node kind after observing empty tuple elements; candidate_a remains committed to the tuple branch and returns `()`.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This corrected type-variant test uses a direct `ast.AST` subclass, unlike the previous Constant subclass whose concrete type prevented the intended branch transition. It exercises the only observable semantic disagreement between the supplied patches.",
+  "test_patch": "diff --git a/tests/test_pycode_ast.py b/tests/test_pycode_ast.py\n--- a/tests/test_pycode_ast.py\n+++ b/tests/test_pycode_ast.py\n@@ -70,3 +70,21 @@ def test_unparse_py38():\n     expected = \"lambda x=0, /, y=1, *args, z, **kwargs: ...\"\n     module = ast.parse(source)\n     assert ast.unparse(module.body[0].value) == expected\n+\n+\n+def test_unparse_deferred_ast_kind():\n+    class DeferredConstant(ast.ast.AST):\n+        def __init__(self):\n+            self._tuple_view = True\n+            self.value = frozenset()\n+\n+        @property\n+        def __class__(self):\n+            return ast.ast.Tuple if self._tuple_view else ast.ast.Constant\n+\n+        @property\n+        def elts(self):\n+            self._tuple_view = False\n+            return []\n+\n+    assert ast.unparse(DeferredConstant()) == 'frozenset()'\n",
+  "test_command": "pytest -q tests/test_pycode_ast.py::test_unparse_deferred_ast_kind"
+}

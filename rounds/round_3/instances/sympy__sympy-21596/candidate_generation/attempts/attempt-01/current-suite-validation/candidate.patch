@@ -1,0 +1,54 @@
+diff --git a/sympy/sets/handlers/intersection.py b/sympy/sets/handlers/intersection.py
+index c54dc8f72a..92c4e111b4 100644
+--- a/sympy/sets/handlers/intersection.py
++++ b/sympy/sets/handlers/intersection.py
+@@ -303,10 +303,46 @@ def intersection_sets(self, other): # noqa:F811
+         elif ifree != {n}:
+             return None
+         else:
+-            # univarite imaginary part in same variable
+-            x, xis = zip(*[solve_linear(i, 0) for i in Mul.make_args(im) if n in i.free_symbols])
++            # univariate imaginary part in same variable
++            # Factor the imaginary part to get linear factors
++            from sympy import factor
++            im = factor(im)
++            # Only consider factors that can be zero (i.e., have n with non-zero coefficient when solved)
++            im_factors = []
++            for i in Mul.make_args(im):
++                if n in i.free_symbols and not i.is_number:
++                    sol = solve_linear(i, 0)
++                    # Only include factors where solving gives a valid solution (non-zero coefficient)
++                    if sol[0] == n:
++                        im_factors.append(i)
++            if not im_factors:
++                return None
++            x, xis = zip(*[solve_linear(i, 0) for i in im_factors])
+             if x and all(i == n for i in x):
+-                base_set -= FiniteSet(xis)
++                # Found specific n values where im = 0
++                # First filter out n values where denominator of the original expression is zero
++                valid_xis = []
++                for xi in xis:
++                    if xi not in base_set:
++                        continue
++                    # Check if this xi makes any denominator zero
++                    is_valid = True
++                    for d in denoms(f):
++                        if d.has(n):
++                            if d.subs(n, xi) == 0:
++                                is_valid = False
++                                break
++                    if is_valid:
++                        valid_xis.append(xi)
++                if not valid_xis:
++                    return S.EmptySet
++                # Compute the corresponding real values, filtering out infinity
++                real_values = FiniteSet(*[re.subs(n, xi) for xi in valid_xis])
++                # Filter out any infinite values
++                real_values = FiniteSet(*[rv for rv in real_values if not rv.is_infinite])
++                if real_values.is_empty:
++                    return S.EmptySet
++                return real_values
+             else:
+                 base_set -= ConditionSet(n, Eq(im, 0), S.Integers)
+         # exclude values that make denominators 0

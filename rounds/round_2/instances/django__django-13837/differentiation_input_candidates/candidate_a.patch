@@ -1,0 +1,26 @@
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index b8efb9f881..f2fec399fd 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -217,11 +217,20 @@ def get_child_arguments():
+     on reloading.
+     """
+     import django.__main__
++    import __main__
+     django_main_path = Path(django.__main__.__file__)
+     py_script = Path(sys.argv[0])
+ 
+     args = [sys.executable] + ['-W%s' % o for o in sys.warnoptions]
+-    if py_script == django_main_path:
++    # __spec__ is set when the server was started with the `-m` option,
++    # see https://docs.python.org/3/reference/import.html#main-spec
++    # __spec__ may not exist, e.g. when running in a Conda env.
++    if getattr(__main__, '__spec__', None) is not None and __main__.__spec__.parent:
++        # The server was started with `python -m django runserver`
++        # or `python -m package.name runserver`.
++        args += ['-m', __main__.__spec__.parent]
++        args += sys.argv[1:]
++    elif py_script == django_main_path:
+         # The server was started with `python -m django runserver`.
+         args += ['-m', 'django']
+         args += sys.argv[1:]

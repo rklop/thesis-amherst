@@ -1,0 +1,58 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -1,7 +1,8 @@
+ from django.db import migrations, models
+ from django.db.migrations import operations
+ from django.db.migrations.optimizer import MigrationOptimizer
+ from django.db.migrations.serializer import serializer_factory
++from django.db.migrations.state import ModelState, ProjectState
+ from django.test import SimpleTestCase
+ 
+ from .models import EmptyManager, UnicodeModel
+@@ -203,9 +204,45 @@ class OptimizerTests(SimpleTestCase):
+     def test_alter_alter_unique_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterUniqueTogether("Foo", [["a", "b"]]),
+             migrations.AlterUniqueTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_together_subclass_preserves_state(self):
++        class AddUniqueTogether(migrations.AlterUniqueTogether):
++            def state_forwards(self, app_label, state):
++                model_state = state.models[app_label, self.name_lower]
++                unique_together = set(
++                    model_state.options.get(self.option_name, set())
++                )
++                unique_together.update(self.option_value)
++                state.alter_model_options(
++                    app_label,
++                    self.name_lower,
++                    {self.option_name: unique_together},
++                )
++
++        state = ProjectState()
++        state.add_model(ModelState(
++            "migrations",
++            "Foo",
++            [
++                ("initial", models.IntegerField()),
++                ("intermediate", models.IntegerField()),
++                ("added", models.IntegerField()),
++            ],
++            options={"unique_together": {("initial",)}},
++        ))
++        operations, _ = self.optimize([
++            migrations.AlterUniqueTogether("Foo", [("intermediate",)]),
++            AddUniqueTogether("Foo", [("added",)]),
++        ], "migrations")
++        for operation in operations:
++            operation.state_forwards("migrations", state)
++        self.assertEqual(
++            state.models["migrations", "foo"].options["unique_together"],
++            {("intermediate",), ("added",)},
++        )
++
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),

@@ -1,0 +1,45 @@
+diff --git a/tests/roots/test-ext-autodoc/target/properties.py b/tests/roots/test-ext-autodoc/target/properties.py
+--- a/tests/roots/test-ext-autodoc/target/properties.py
++++ b/tests/roots/test-ext-autodoc/target/properties.py
+@@ -1,6 +1,19 @@
+ class Foo:
+     """docstring"""
+ 
+     @property
+     def prop(self) -> int:
+         """docstring"""
++
++
++class OneShotClassProperty:
++    accesses = 0
++
++    @classmethod
++    @property
++    def prop(cls) -> int:
++        """A class property that can only be resolved once."""
++        cls.accesses += 1
++        if cls.accesses > 1:
++            raise RuntimeError('class property was evaluated twice')
++        return 42
+diff --git a/tests/test_ext_autodoc_autoproperty.py b/tests/test_ext_autodoc_autoproperty.py
+--- a/tests/test_ext_autodoc_autoproperty.py
++++ b/tests/test_ext_autodoc_autoproperty.py
+@@ -26,3 +26,18 @@ def test_properties(app):
+         '   docstring',
+         '',
+     ]
++
++
++@pytest.mark.sphinx('html', testroot='ext-autodoc')
++def test_class_property_getter_is_not_accessed_twice(app):
++    actual = do_autodoc(app, 'property', 'target.properties.OneShotClassProperty.prop')
++    assert list(actual) == [
++        '',
++        '.. py:property:: OneShotClassProperty.prop',
++        '   :module: target.properties',
++        '   :classmethod:',
++        '   :type: int',
++        '',
++        '   A class property that can only be resolved once.',
++        '',
++    ]

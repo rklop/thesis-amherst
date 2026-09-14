@@ -1,0 +1,110 @@
+diff --git a/pylint/config/argument.py b/pylint/config/argument.py
+index 0bb732b5..36a792e8 100644
+--- a/pylint/config/argument.py
++++ b/pylint/config/argument.py
+@@ -457,6 +457,7 @@ class _CallableArgument(_Argument):
+         kwargs: dict[str, Any],
+         hide_help: bool,
+         section: str | None,
++        nargs: int | str | None = None,
+     ) -> None:
+         super().__init__(
+             flags=flags, arg_help=arg_help, hide_help=hide_help, section=section
+@@ -467,3 +468,6 @@ class _CallableArgument(_Argument):
+ 
+         self.kwargs = kwargs
+         """Any additional arguments passed to the action."""
++
++        self.nargs = nargs
++        """The number of arguments to consume (e.g., 0 for flags without args)."""
+diff --git a/pylint/config/arguments_manager.py b/pylint/config/arguments_manager.py
+index ea87de82..03c8a8bc 100644
+--- a/pylint/config/arguments_manager.py
++++ b/pylint/config/arguments_manager.py
+@@ -213,11 +213,14 @@ class _ArgumentsManager:
+                 help=argument.help,
+             )
+         elif isinstance(argument, _CallableArgument):
++            kwargs = {"help": argument.help}
++            if argument.nargs is not None:
++                kwargs["nargs"] = argument.nargs
+             section_group.add_argument(
+                 *argument.flags,
+                 **argument.kwargs,
+                 action=argument.action,
+-                help=argument.help,
++                **kwargs,
+             )
+         elif isinstance(argument, _ExtendArgument):
+             section_group.add_argument(
+diff --git a/pylint/config/utils.py b/pylint/config/utils.py
+index 8c790416..f37d849a 100644
+--- a/pylint/config/utils.py
++++ b/pylint/config/utils.py
+@@ -21,7 +21,7 @@ from pylint.config.argument import (
+     _StoreOldNamesArgument,
+     _StoreTrueArgument,
+ )
+-from pylint.config.callback_actions import _CallbackAction
++from pylint.config.callback_actions import _CallbackAction, _DoNothingAction
+ from pylint.config.exceptions import ArgumentPreprocessingError
+ 
+ if TYPE_CHECKING:
+@@ -64,6 +64,11 @@ def _convert_option_to_argument(
+             section=optdict.get("group", None),
+         )
+     if not isinstance(action, str) and issubclass(action, _CallbackAction):
++        # Check if this is a flag option (like verbose) that doesn't take an argument
++        # by checking if it's a subclass of _DoNothingAction or similar
++        nargs = None
++        if action in (_DoNothingAction,):
++            nargs = 0
+         return _CallableArgument(
+             flags=flags,
+             action=action,
+@@ -71,6 +76,7 @@ def _convert_option_to_argument(
+             kwargs=optdict.get("kwargs", {}),
+             hide_help=optdict.get("hide", False),
+             section=optdict.get("group", None),
++            nargs=nargs,
+         )
+     try:
+         default = optdict["default"]
+@@ -207,6 +213,7 @@ PREPROCESSABLE_OPTIONS: dict[
+     "--output": (True, _set_output),
+     "--load-plugins": (True, _add_plugins),
+     "--verbose": (False, _set_verbose_mode),
++    "-v": (False, _set_verbose_mode),
+     "--enable-all-extensions": (False, _enable_all_extensions),
+ }
+ 
+@@ -218,16 +225,23 @@ def _preprocess_options(run: Run, args: Sequence[str]) -> list[str]:
+     i = 0
+     while i < len(args):
+         argument = args[i]
+-        if not argument.startswith("--"):
++        
++        # Handle short options (e.g., -v) and long options (e.g., --verbose)
++        if argument.startswith("--"):
++            # Long option
++            try:
++                option, value = argument.split("=", 1)
++            except ValueError:
++                option, value = argument, None
++        elif argument.startswith("-"):
++            # Short option (e.g., -v)
++            option = argument
++            value = None
++        else:
+             processed_args.append(argument)
+             i += 1
+             continue
+ 
+-        try:
+-            option, value = argument.split("=", 1)
+-        except ValueError:
+-            option, value = argument, None
+-
+         if option not in PREPROCESSABLE_OPTIONS:
+             processed_args.append(argument)
+             i += 1

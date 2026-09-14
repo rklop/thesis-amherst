@@ -1,0 +1,10 @@
+{
+  "test_name": "test_sum_min_count_multiple_dims_object_scalar",
+  "specification_gap": "Multi-dimensional sum must enforce min_count even when an object-typed reduction produces a Python scalar without a dtype attribute.",
+  "input_description": "A 2x2 object-typed DataArray containing one valid number and three NaNs is summed over both named dimensions with skipna=True and min_count=2.",
+  "expected_output": "A scalar DataArray containing NaN because only one non-NA value is present. Candidate A instead leaves the partial sum, 1, unchanged.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the issue's multi-dimension public entry point at a scalar/type boundary. Candidate B preserves min_count handling for dtype-less scalar results, while candidate A's unrelated scalar-branch change skips it.",
+  "test_patch": "diff --git a/xarray/tests/test_duck_array_ops.py b/xarray/tests/test_duck_array_ops.py\n--- a/xarray/tests/test_duck_array_ops.py\n+++ b/xarray/tests/test_duck_array_ops.py\n@@ -594,6 +594,15 @@ def test_min_count(dim_num, dtype, dask, func, aggdim):\n     assert_allclose(actual, expected)\n     assert_dask_array(actual, dask)\n \n+\n+def test_sum_min_count_multiple_dims_object_scalar():\n+    values = np.array([[1, np.nan], [np.nan, np.nan]], dtype=object)\n+    da = DataArray(values, dims=(\"x\", \"y\"))\n+\n+    actual = da.sum(dim=[\"x\", \"y\"], skipna=True, min_count=2)\n+\n+    assert_equal(actual, DataArray(np.nan))\n+\n \n @pytest.mark.parametrize(\"func\", [\"sum\", \"prod\"])\n def test_min_count_dataset(func):\n",
+  "test_command": "cd /testbed && pytest -q xarray/tests/test_duck_array_ops.py::test_sum_min_count_multiple_dims_object_scalar"
+}

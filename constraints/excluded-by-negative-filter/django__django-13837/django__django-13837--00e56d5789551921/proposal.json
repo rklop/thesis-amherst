@@ -1,0 +1,10 @@
+{
+  "test_name": "test_stale_module_spec",
+  "specification_gap": "get_child_arguments() must only reconstruct a `python -m package` invocation when `__main__` module metadata describes the current `sys.argv[0]`. Stale metadata for a different entry point must not override an ordinary script invocation.",
+  "input_description": "Set `sys.argv` to an existing ordinary script (`test_autoreload.py runserver`) while `__main__.__spec__` and `__main__.__file__` describe the separately imported `django.__main__` module.",
+  "expected_output": "The child command is `[sys.executable, __file__, 'runserver']`, preserving the current script invocation rather than changing it to `[sys.executable, '-m', 'django', 'runserver']`.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "Candidate A verifies that module metadata belongs to the current entry point. Candidate B treats any nonempty `__spec__.parent` as authoritative, so stale metadata silently restarts a different program.",
+  "test_patch": "diff --git a/tests/utils_tests/test_autoreload.py b/tests/utils_tests/test_autoreload.py\n--- a/tests/utils_tests/test_autoreload.py\n+++ b/tests/utils_tests/test_autoreload.py\n@@ -164,6 +164,16 @@ class TestChildArguments(SimpleTestCase):\n             autoreload.get_child_arguments(),\n             [sys.executable, '-m', 'django', 'runserver']\n         )\n+\n+    @mock.patch('__main__.__file__', django.__main__.__file__)\n+    @mock.patch('__main__.__spec__', django.__main__.__spec__)\n+    @mock.patch('sys.argv', [__file__, 'runserver'])\n+    @mock.patch('sys.warnoptions', [])\n+    def test_stale_module_spec(self):\n+        self.assertEqual(\n+            autoreload.get_child_arguments(),\n+            [sys.executable, __file__, 'runserver'],\n+        )\n \n     @mock.patch('sys.argv', [__file__, 'runserver'])\n     @mock.patch('sys.warnoptions', ['error'])\n",
+  "test_command": "python tests/runtests.py utils_tests.test_autoreload.TestChildArguments.test_stale_module_spec"
+}

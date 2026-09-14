@@ -1,0 +1,29 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index d69c24419b..b5e36e7868 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1666,6 +1666,7 @@ class Query(BaseExpression):
+             filter_expr = (filter_lhs, OuterRef(filter_rhs.name))
+         # Generate the inner query.
+         query = Query(self.model)
++        query._filtered_relations = self._filtered_relations.copy()
+         query.add_filter(filter_expr)
+         query.clear_ordering(True)
+         # Try to have as simple as possible subquery -> trim leading joins from
+@@ -2150,6 +2151,16 @@ class Query(BaseExpression):
+                 self.where_class, None, lookup_tables[trimmed_paths + 1])
+             if extra_restriction:
+                 self.where.add(extra_restriction, AND)
++            # Handle filtered_relation condition - add it to the WHERE clause
++            # when trimming a join that has a filtered_relation
++            join = self.alias_map[lookup_tables[trimmed_paths + 1]]
++            if join.filtered_relation:
++                filtered_relation = join.filtered_relation
++                if filtered_relation.condition:
++                    condition = self.build_filtered_relation_q(
++                        filtered_relation.condition, reuse=set(filtered_relation.path)
++                    )
++                    self.where.add(condition, AND)
+         else:
+             # TODO: It might be possible to trim more joins from the start of the
+             # inner query if it happens to have a longer join chain containing the

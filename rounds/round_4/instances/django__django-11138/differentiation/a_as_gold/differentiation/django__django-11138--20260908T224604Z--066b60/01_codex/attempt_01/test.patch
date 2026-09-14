@@ -1,0 +1,41 @@
+diff --git a/tests/timezones/tests.py b/tests/timezones/tests.py
+--- a/tests/timezones/tests.py
++++ b/tests/timezones/tests.py
+@@ -2,7 +2,7 @@ import datetime
+ import re
+ import sys
+ from contextlib import contextmanager
+-from unittest import SkipTest, skipIf
++from unittest import SkipTest, skipIf, skipUnless
+ from xml.dom.minidom import parseString
+ 
+ import pytz
+@@ -10,7 +10,7 @@ import pytz
+ from django.contrib.auth.models import User
+ from django.core import serializers
+ from django.core.exceptions import ImproperlyConfigured
+-from django.db import connection, connections
++from django.db import DatabaseError, connection, connections
+ from django.db.models import F, Max, Min
+ from django.http import HttpRequest
+ from django.template import (
+@@ -578,6 +578,18 @@ class ForcedTimeZoneDatabaseTests(TransactionTestCase):
+         fake_dt = datetime.datetime(2011, 9, 1, 17, 20, 30, tzinfo=UTC)
+         self.assertEqual(event.dt, fake_dt)
+ 
++    @skipUnless(connection.vendor == 'sqlite', 'SQLite-specific test')
++    def test_date_lookup_relocalizes_when_timezones_match(self):
++        """
++        Database-local datetimes are localized even when the source and
++        target timezone names match.
++        """
++        paris = pytz.timezone('Europe/Paris')
++        dt = paris.localize(datetime.datetime(2015, 10, 25, 2, 30), is_dst=True)
++        with self.override_database_connection_timezone('Europe/Paris'), timezone.override(paris):
++            Event.objects.create(dt=dt)
++            with self.assertRaises(DatabaseError):
++                Event.objects.filter(dt__date=dt.date()).exists()
++
+ 
+ @skipUnlessDBFeature('supports_timezones')
+ @override_settings(TIME_ZONE='Africa/Nairobi', USE_TZ=True)

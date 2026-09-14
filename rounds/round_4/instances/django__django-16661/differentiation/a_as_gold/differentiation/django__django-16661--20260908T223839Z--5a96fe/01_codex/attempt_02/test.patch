@@ -1,0 +1,51 @@
+diff --git a/tests/modeladmin/test_lookup_allowed_custom_relation.py b/tests/modeladmin/test_lookup_allowed_custom_relation.py
+new file mode 100644
+index 0000000000..3b5e0109b8
+--- /dev/null
++++ b/tests/modeladmin/test_lookup_allowed_custom_relation.py
+@@ -0,0 +1,45 @@
++from django.contrib.admin.options import ModelAdmin
++from django.contrib.admin.sites import AdminSite
++from django.db import models
++from django.test import SimpleTestCase
++from django.test.utils import isolate_apps
++
++
++class TraversableOneToOneField(models.OneToOneField):
++    """A custom relation whose traversal metadata is authoritative."""
++
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        self.is_relation = False
++
++
++class LookupAllowedCustomRelationTests(SimpleTestCase):
++    @isolate_apps("modeladmin")
++    def test_traversable_primary_key_relation_without_relation_flag(self):
++        class Country(models.Model):
++            name = models.CharField(max_length=20)
++
++        class Place(models.Model):
++            country = models.ForeignKey(Country, models.CASCADE)
++
++        class Restaurant(models.Model):
++            place = TraversableOneToOneField(
++                Place,
++                models.CASCADE,
++                primary_key=True,
++            )
++
++        class Waiter(models.Model):
++            restaurant = models.ForeignKey(Restaurant, models.CASCADE)
++
++        class WaiterAdmin(ModelAdmin):
++            list_filter = ["restaurant__place__country"]
++
++        model_admin = WaiterAdmin(Waiter, AdminSite())
++        self.assertIs(
++            model_admin.lookup_allowed(
++                "restaurant__place__country",
++                "test_value",
++            ),
++            True,
++        )

@@ -1,0 +1,38 @@
+diff --git a/tests/utils_tests/test_autoreload.py b/tests/utils_tests/test_autoreload.py
+--- a/tests/utils_tests/test_autoreload.py
++++ b/tests/utils_tests/test_autoreload.py
+@@ -159,12 +159,35 @@ class TestChildArguments(SimpleTestCase):
+     @mock.patch('sys.argv', [django.__main__.__file__, 'runserver'])
+     @mock.patch('sys.warnoptions', [])
+     def test_run_as_module(self):
+         self.assertEqual(
+             autoreload.get_child_arguments(),
+             [sys.executable, '-m', 'django', 'runserver']
+         )
+ 
++    @mock.patch('sys.argv', [__file__, 'runserver'])
++    @mock.patch('sys.warnoptions', [])
++    def test_main_module_is_resolved_after_django_main(self):
++        stale_main = types.ModuleType('__main__')
++        stale_main.__spec__ = types.SimpleNamespace(parent='stale.package')
++        active_main = types.ModuleType('__main__')
++        active_main.__spec__ = types.SimpleNamespace(parent='pkg_other_than_django')
++        original_import = __import__
++
++        def import_module(name, globals=None, locals=None, fromlist=(), level=0):
++            if name == 'django.__main__':
++                sys.modules['__main__'] = active_main
++            return original_import(
++                name, globals, locals, fromlist, level,
++            )
++
++        with mock.patch.dict(sys.modules, {'__main__': stale_main}):
++            with mock.patch('builtins.__import__', side_effect=import_module):
++                self.assertEqual(
++                    autoreload.get_child_arguments(),
++                    [sys.executable, '-m', 'pkg_other_than_django', 'runserver'],
++                )
++
+     @mock.patch('sys.argv', [__file__, 'runserver'])
+     @mock.patch('sys.warnoptions', ['error'])
+     def test_warnoptions(self):

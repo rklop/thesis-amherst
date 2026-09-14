@@ -1,0 +1,29 @@
+diff --git a/tests/db_functions/datetime/test_extract_trunc.py b/tests/db_functions/datetime/test_extract_trunc.py
+--- a/tests/db_functions/datetime/test_extract_trunc.py
++++ b/tests/db_functions/datetime/test_extract_trunc.py
+@@ -346,6 +346,24 @@ class DateFunctionTests(TestCase):
+         )
+         # Both dates are from the same week year.
+         self.assertEqual(DTModel.objects.filter(start_datetime__iso_year=ExtractIsoYear('start_datetime')).count(), 2)
+ 
++    def test_extract_iso_year_renamed_subclass_lookup(self):
++        class RenamedExtractIsoYear(ExtractIsoYear):
++            lookup_name = 'renamed_iso_year'
++
++            def as_sql(self, compiler, connection):
++                sql, params = compiler.compile(self.lhs)
++                return connection.ops.date_extract_sql('iso_year', sql), params
++
++        boundary = datetime(2014, 12, 31).date()
++        DTModel.objects.create(name='boundary', start_date=boundary)
++        queryset = DTModel.objects.annotate(
++            extracted=RenamedExtractIsoYear('start_date'),
++        ).filter(extracted=2015)
++        self.assertEqual(
++            list(queryset.values_list('start_date', 'extracted')),
++            [(boundary, 2015)],
++        )
++
+     def test_extract_iso_year_func_boundaries(self):
+         end_datetime = datetime(2016, 6, 15, 14, 10, 50, 123)
+         if settings.USE_TZ:

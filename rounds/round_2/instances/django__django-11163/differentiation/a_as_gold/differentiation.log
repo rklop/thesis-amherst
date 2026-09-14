@@ -1,0 +1,58 @@
+2026-09-08T14:14:35.290638+00:00 [STAGE] 1/6 Collecting and validating inputs
+Using the latest cached version of the dataset since princeton-nlp/SWE-Bench_Verified couldn't be found on the Hugging Face Hub (offline mode is enabled).
+Found the latest cached dataset configuration 'default' at /home/rocky/.cache/huggingface/datasets/princeton-nlp___swe-bench_verified/default/0.0.0/c104f840cc67f8b6eec6f759ebc8b2693d585d4a (last modified on Tue Jun 23 03:51:31 2026).
+2026-09-08T14:14:35.886047+00:00 [STAGE] 2/6 Checking both patches against the pristine image
+2026-09-08T14:14:36.326886+00:00 [INFO] candidate_a applies cleanly
+2026-09-08T14:14:36.768408+00:00 [INFO] candidate_b applies cleanly
+2026-09-08T14:14:36.768528+00:00 [STAGE] 3/6 Extracting a pristine repository for Codex inspection
+2026-09-08T14:14:38.089370+00:00 [INFO] Pristine repository extracted to /home/rocky/SWE-ABS/mini-swe-agent/runs/spec-refinement-core-r2-negative-filter-on-v1/round-02/bidirectional-differentiation/instances/django__django-11163/a_as_gold/differentiation/django__django-11163--20260908T141435Z--ffb5b9/workspace/repo
+2026-09-08T14:14:38.089423+00:00 [STAGE] 4/6 Generating and validating a separating test with Codex
+2026-09-08T14:14:38.089923+00:00 [INFO] Launching fresh Codex attempt 1 with model gpt-5.6-sol
+2026-09-08T14:14:39.602261+00:00 [INFO] Codex thread started: 01a0815e-f6e4-7740-bd46-61202b43c8cf
+2026-09-08T14:18:51.853135+00:00 [INFO] Codex turn completed; usage={'input_tokens': 231645, 'cached_input_tokens': 203264, 'cache_write_input_tokens': 0, 'output_tokens': 6035, 'reasoning_output_tokens': 3748}
+2026-09-08T14:18:53.248914+00:00 [INFO] Codex attempt 1 proposed 'test_explicit_m2m_field_with_empty_meta_fields_is_saved' in tests/model_forms/tests.py
+2026-09-08T14:18:54.815581+00:00 [INFO] attempt 1 candidate_a: ran=True passed=True exit=0
+2026-09-08T14:18:56.378625+00:00 [INFO] attempt 1 candidate_b: ran=True passed=False exit=1
+2026-09-08T14:18:56.379884+00:00 [INFO] Validated separation on Codex attempt 1: candidate_a=PASS, candidate_b=FAIL
+2026-09-08T14:18:56.379923+00:00 [STAGE] 5/6 MiniMax rating disabled; execution-only mode
+2026-09-08T14:18:56.379950+00:00 [STAGE] 6/6 Writing consolidated results
+2026-09-08T14:18:56.634500+00:00 [INFO] Removed extracted repository; pass --keep-workspace to retain it
+
+===== SELECTED DIFFERENTIATING TEST =====
+diff --git a/tests/model_forms/tests.py b/tests/model_forms/tests.py
+--- a/tests/model_forms/tests.py
++++ b/tests/model_forms/tests.py
+@@ -358,6 +358,28 @@ class ModelFormBaseTest(TestCase):
+                 model = Category
+                 fields = []  # url will still appear, since it is explicit above
+ 
+         self.assertIsInstance(ReplaceField.base_fields['url'], forms.fields.BooleanField)
+ 
++    def test_explicit_m2m_field_with_empty_meta_fields_is_saved(self):
++        class ExplicitCategoriesForm(forms.ModelForm):
++            categories = forms.ModelMultipleChoiceField(Category.objects.all())
++
++            class Meta:
++                model = Article
++                fields = []
++
++        category = Category.objects.create(name='Test', slug='test', url='test')
++        writer = Writer.objects.create(name='Test Writer')
++        article = Article.objects.create(
++            article='Body',
++            headline='Headline',
++            pub_date=datetime.date(2019, 4, 2),
++            slug='headline',
++            writer=writer,
++        )
++        form = ExplicitCategoriesForm({'categories': [category.pk]}, instance=article)
++        self.assertTrue(form.is_valid())
++        form.save()
++        self.assertEqual(list(article.categories.values_list('pk', flat=True)), [category.pk])
++
+     def test_override_field(self):
+         class WriterForm(forms.ModelForm):
+             book = forms.CharField(required=False)
+===== END DIFFERENTIATING TEST =====
+
+2026-09-08T14:18:56.634662+00:00 [INFO] Completed. Summary: /home/rocky/SWE-ABS/mini-swe-agent/runs/spec-refinement-core-r2-negative-filter-on-v1/round-02/bidirectional-differentiation/instances/django__django-11163/a_as_gold/differentiation/django__django-11163--20260908T141435Z--ffb5b9/SUMMARY.md

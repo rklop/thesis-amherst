@@ -1,0 +1,48 @@
+diff --git a/xarray/core/rolling.py b/xarray/core/rolling.py
+index aef290f6..e55ab430 100644
+--- a/xarray/core/rolling.py
++++ b/xarray/core/rolling.py
+@@ -270,16 +270,35 @@ class DataArrayRolling(Rolling["DataArray"]):
+     def __iter__(self) -> Iterator[tuple[RollingKey, DataArray]]:
+         if self.ndim > 1:
+             raise ValueError("__iter__ is only supported for 1d-rolling")
+-        stops = np.arange(1, len(self.window_labels) + 1)
+-        starts = stops - int(self.window[0])
+-        starts[: int(self.window[0])] = 0
+-        for (label, start, stop) in zip(self.window_labels, starts, stops):
+-            window = self.obj.isel({self.dim[0]: slice(start, stop)})
+ 
+-            counts = window.count(dim=self.dim[0])
+-            window = window.where(counts >= self.min_periods)
++        dim0 = self.dim[0]
++        window = int(self.window[0])
++        # Use the current size of the rolling dimension, as the data can change
++        n = self.obj.sizes[dim0]
+ 
+-            yield (label, window)
++        if self.center[0]:
++            # For centered windows, the window is [i - window//2, i + window//2 + 1)
++            # This matches the behavior of rolling.mean() with center=True
++            offset = window // 2
++            starts = np.arange(n) - offset
++            stops = starts + window
++        else:
++            # For non-centered windows
++            stops = np.arange(1, n + 1)
++            starts = stops - window
++            starts[:window] = 0
++
++        # Clip to valid range
++        starts = np.clip(starts, 0, n)
++        stops = np.clip(stops, 0, n)
++
++        for label, start, stop in zip(self.window_labels, starts, stops):
++            window_da = self.obj.isel({dim0: slice(start, stop)})
++
++            counts = window_da.count(dim=dim0)
++            window_da = window_da.where(counts >= self.min_periods)
++
++            yield (label, window_da)
+ 
+     def construct(
+         self,

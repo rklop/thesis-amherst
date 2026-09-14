@@ -1,0 +1,47 @@
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index d69c24419b..86ddcb6073 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1666,6 +1666,7 @@ class Query(BaseExpression):
+             filter_expr = (filter_lhs, OuterRef(filter_rhs.name))
+         # Generate the inner query.
+         query = Query(self.model)
++        query._filtered_relations = self._filtered_relations.copy()
+         query.add_filter(filter_expr)
+         query.clear_ordering(True)
+         # Try to have as simple as possible subquery -> trim leading joins from
+@@ -2160,7 +2161,33 @@ class Query(BaseExpression):
+         # But the first entry in the query's FROM clause must not be a JOIN.
+         for table in self.alias_map:
+             if self.alias_refcount[table] > 0:
+-                self.alias_map[table] = BaseTable(self.alias_map[table].table_name, table)
++                join = self.alias_map[table]
++                # If the Join has a filtered_relation, we need to preserve its condition
++                if hasattr(join, 'filtered_relation') and join.filtered_relation:
++                    fr = join.filtered_relation
++                    # Get the model for the table
++                    model = join.join_field.related_model
++                    # Get the field name from the condition
++                    relation_name = fr.relation_name
++                    prefix = relation_name + '__'
++                    for child in fr.condition.children:
++                        if isinstance(child, tuple):
++                            lhs, rhs = child
++                            # Strip the relation prefix
++                            if lhs.startswith(prefix):
++                                lhs = lhs[len(prefix):]
++                            # Get the field from the model
++                            field_parts = lhs.split('__')
++                            field = model._meta.get_field(field_parts[0])
++                            # Get the lookup class
++                            lookup_parts = field_parts[1:] if len(field_parts) > 1 else ['exact']
++                            lookup = field.get_lookup(lookup_parts[0])
++                            if lookup:
++                                # Create the lookup
++                                col = field.get_col(table)
++                                l = lookup(col, rhs)
++                                self.where.add(l, AND)
++                self.alias_map[table] = BaseTable(join.table_name, table)
+                 break
+         self.set_select([f.get_col(select_alias) for f in select_fields])
+         return trimmed_prefix, contains_louter

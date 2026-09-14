@@ -1,0 +1,50 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "969371f5292e937c3da708ba59d45f9caca1dd196b1cc8e5d680fb272495a0bc",
+    "test_sha256": "11b9bfc12e5ca843c1335cfd562e92f1e109593e3e89c72725c9f0a6b4ba7f2c",
+    "test": {
+      "test_id": "django__django-14155--11b9bfc12e5ca843",
+      "test_name": "test_repr_partial_subclass",
+      "specification_gap": "ResolverMatch must expose the underlying callable and pre-bound arguments for any functools.partial instance, including subclasses whose own repr is opaque.",
+      "expected_output": "repr(ResolverMatch(...)) contains 'empty_view', 'preset', and \"template_name='template.html'\" despite the partial subclass hiding those details in its own repr.",
+      "test_patch": "diff --git a/tests/urlpatterns_reverse/tests.py b/tests/urlpatterns_reverse/tests.py\n--- a/tests/urlpatterns_reverse/tests.py\n+++ b/tests/urlpatterns_reverse/tests.py\n@@ -1,6 +1,7 @@\n \"\"\"\n Unit tests for reverse URL lookups.\n \"\"\"\n+import functools\n import sys\n import threading\n \n@@ -1140,10 +1141,23 @@ class ResolverMatchTests(SimpleTestCase):\n     def test_repr(self):\n         self.assertEqual(\n             repr(resolve('/no_kwargs/42/37/')),\n             \"ResolverMatch(func=urlpatterns_reverse.views.empty_view, \"\n             \"args=('42', '37'), kwargs={}, url_name=no-kwargs, app_names=[], \"\n             \"namespaces=[], route=^no_kwargs/([0-9]+)/([0-9]+)/$)\",\n         )\n \n+    def test_repr_partial_subclass(self):\n+        class OpaquePartial(functools.partial):\n+            def __repr__(self):\n+                return '<opaque partial>'\n+\n+        func = OpaquePartial(\n+            empty_view, 'preset', template_name='template.html',\n+        )\n+        representation = repr(ResolverMatch(func, (), {}))\n+        for value in ('empty_view', \"'preset'\", \"template_name='template.html'\"):\n+            with self.subTest(value=value):\n+                self.assertIn(value, representation)\n+\n \n @override_settings(ROOT_URLCONF='urlpatterns_reverse.erroneous_urls')\n class ErroneousViewTests(SimpleTestCase):\n",
+      "test_command": "cd /testbed && ./tests/runtests.py urlpatterns_reverse.tests.ResolverMatchTests.test_repr_partial_subclass",
+      "test_patch_sha256": "11b9bfc12e5ca843c1335cfd562e92f1e109593e3e89c72725c9f0a6b4ba7f2c",
+      "polarity": "must_fail",
+      "negative_specification": "A final patch is not required to extract and display the underlying callable and bound arguments from functools.partial subclasses that provide an opaque repr.",
+      "expected_failure": {
+        "forbidden_substrings": [
+          "collected 0 items",
+          "no tests ran",
+          "ERROR collecting",
+          "command not found",
+          "No such file or directory",
+          "Could not find a version that satisfies the requirement",
+          "Temporary failure in name resolution"
+        ],
+        "kind": "behavioral_test_failure",
+        "reference_log_sha256": "2f29f79af406c2005f7c3845359420594d61c1689c8eb09cd8277916b916f023",
+        "reference_returncode": 1,
+        "required_any_substrings": [
+          "AssertionError",
+          "FAILED",
+          "FAIL:"
+        ],
+        "required_substrings": [
+          "test_repr_partial_subclass"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 1,
+    "passed": false,
+    "test_ran": true,
+    "duration_seconds": 1.422,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-14155--11b9bfc12e5ca843",
+  "polarity": "must_fail"
+}

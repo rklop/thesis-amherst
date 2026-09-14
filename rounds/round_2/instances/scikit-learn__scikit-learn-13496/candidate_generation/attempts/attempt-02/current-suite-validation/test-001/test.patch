@@ -1,0 +1,38 @@
+diff --git a/sklearn/ensemble/tests/test_iforest.py b/sklearn/ensemble/tests/test_iforest.py
+--- a/sklearn/ensemble/tests/test_iforest.py
++++ b/sklearn/ensemble/tests/test_iforest.py
+@@ -22,6 +22,7 @@ from sklearn.utils.testing import assert_allclose
+ 
+ from sklearn.model_selection import ParameterGrid
+ from sklearn.ensemble import IsolationForest
++from sklearn.ensemble.bagging import BaseBagging
+ from sklearn.ensemble.iforest import _average_path_length
+ from sklearn.model_selection import train_test_split
+ from sklearn.datasets import load_boston, load_iris
+@@ -48,6 +49,26 @@ boston.data = boston.data[perm]
+ boston.target = boston.target[perm]
+ 
+ 
++def test_iforest_warm_start_cooperative_forwarding():
++    class RecordingBaseBagging(BaseBagging):
++        def __init__(self, **kwargs):
++            self.forwarded_keys = list(kwargs)
++            super().__init__(**kwargs)
++
++        def _set_oob_score(self, X, y):
++            pass
++
++    class RecordingIsolationForest(IsolationForest,
++                                    RecordingBaseBagging):
++        pass
++
++    estimator = RecordingIsolationForest(warm_start=True)
++    keys = estimator.forwarded_keys
++
++    assert keys.index("warm_start") + 1 == keys.index("n_jobs")
++    assert estimator.warm_start is True
++
++
+ @pytest.mark.filterwarnings('ignore:threshold_ attribute')
+ def test_iforest():
+     """Check Isolation Forest for various parameter settings."""

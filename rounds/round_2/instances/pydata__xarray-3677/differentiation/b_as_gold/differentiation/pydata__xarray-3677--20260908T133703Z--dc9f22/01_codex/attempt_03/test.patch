@@ -1,0 +1,31 @@
+diff --git a/xarray/tests/test_merge.py b/xarray/tests/test_merge.py
+index c9bab221..06cf7c26 100644
+--- a/xarray/tests/test_merge.py
++++ b/xarray/tests/test_merge.py
+@@ -1,3 +1,4 @@
++import inspect
+ import numpy as np
+ import pytest
+ 
+@@ -62,6 +63,19 @@ class TestMergeFunction:
+         with raises_regex(TypeError, "objects must be an iterable"):
+             xr.merge([ds, 1])
+ 
++    def test_dataarray_normalization_precedes_legacy_overwrite_section(self):
++        dataset = xr.Dataset({"a": 0})
++        array = xr.DataArray(1, name="b")
++
++        actual = dataset.merge(array)
++        expected = xr.Dataset({"a": 0, "b": 1})
++        assert actual.identical(expected)
++
++        source = inspect.getsource(merge.dataset_merge_method)
++        normalization = source.index("if isinstance(other, DataArray):")
++        overwrite_section = source.index(
++            "# we are locked into supporting overwrite_vars"
++        )
++        assert normalization < overwrite_section
++
+     def test_merge_no_conflicts_single_var(self):
+         ds1 = xr.Dataset({"a": ("x", [1, 2]), "x": [0, 1]})
+         ds2 = xr.Dataset({"a": ("x", [2, 3]), "x": [1, 2]})

@@ -1,0 +1,81 @@
+diff --git a/pylint/config/utils.py b/pylint/config/utils.py
+index 8c790416..79ad4468 100644
+--- a/pylint/config/utils.py
++++ b/pylint/config/utils.py
+@@ -210,6 +210,11 @@ PREPROCESSABLE_OPTIONS: dict[
+     "--enable-all-extensions": (False, _enable_all_extensions),
+ }
+ 
++# Mapping from short options to their long counterparts
++SHORT_TO_LONG_OPTIONS: dict[str, str] = {
++    "-v": "--verbose",
++}
++
+ 
+ def _preprocess_options(run: Run, args: Sequence[str]) -> list[str]:
+     """Preprocess options before full config parsing has started."""
+@@ -218,30 +223,54 @@ def _preprocess_options(run: Run, args: Sequence[str]) -> list[str]:
+     i = 0
+     while i < len(args):
+         argument = args[i]
+-        if not argument.startswith("--"):
++
++        # Handle both short (-v) and long (--verbose) options
++        if not argument.startswith("-"):
+             processed_args.append(argument)
+             i += 1
+             continue
+ 
+-        try:
+-            option, value = argument.split("=", 1)
+-        except ValueError:
+-            option, value = argument, None
+-
+-        if option not in PREPROCESSABLE_OPTIONS:
++        # Get the option name (without leading -)
++        if argument.startswith("--"):
++            try:
++                option, value = argument.split("=", 1)
++            except ValueError:
++                option, value = argument, None
++            option = option[2:]  # Remove --
++            full_option = f"--{option}"
++        else:
++            # Short option - could be -v or -v=value
++            if "=" in argument:
++                option, value = argument.split("=", 1)
++                option = option[1:]  # Remove single -
++            else:
++                option, value = argument, None
++                option = option[1:]  # Remove single -
++
++            # Map short option to long option
++            short_opt = f"-{option}"
++            if short_opt in SHORT_TO_LONG_OPTIONS:
++                full_option = SHORT_TO_LONG_OPTIONS[short_opt]
++            else:
++                processed_args.append(argument)
++                i += 1
++                continue
++
++        # Check if this option is in the preprocessable options
++        if full_option not in PREPROCESSABLE_OPTIONS:
+             processed_args.append(argument)
+             i += 1
+             continue
+ 
+-        takearg, cb = PREPROCESSABLE_OPTIONS[option]
++        takearg, cb = PREPROCESSABLE_OPTIONS[full_option]
+ 
+         if takearg and value is None:
+             i += 1
+             if i >= len(args) or args[i].startswith("-"):
+-                raise ArgumentPreprocessingError(f"Option {option} expects a value")
++                raise ArgumentPreprocessingError(f"Option {full_option} expects a value")
+             value = args[i]
+         elif not takearg and value is not None:
+-            raise ArgumentPreprocessingError(f"Option {option} doesn't expects a value")
++            raise ArgumentPreprocessingError(f"Option {full_option} doesn't expects a value")
+ 
+         cb(run, value)
+         i += 1

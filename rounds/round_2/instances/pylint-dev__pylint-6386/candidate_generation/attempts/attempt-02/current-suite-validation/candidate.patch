@@ -1,0 +1,64 @@
+diff --git a/pylint/config/arguments_manager.py b/pylint/config/arguments_manager.py
+index ea87de82..91412e58 100644
+--- a/pylint/config/arguments_manager.py
++++ b/pylint/config/arguments_manager.py
+@@ -39,6 +39,7 @@ from pylint.config.exceptions import (
+ from pylint.config.help_formatter import _HelpFormatter
+ from pylint.config.option import Option
+ from pylint.config.option_parser import OptionParser
++from pylint.config.callback_actions import _DoNothingAction
+ from pylint.config.options_provider_mixin import OptionsProviderMixIn
+ from pylint.config.utils import _convert_option_to_argument, _parse_rich_type_value
+ from pylint.constants import MAIN_CHECKER_NAME
+@@ -213,12 +214,24 @@ class _ArgumentsManager:
+                 help=argument.help,
+             )
+         elif isinstance(argument, _CallableArgument):
+-            section_group.add_argument(
+-                *argument.flags,
+-                **argument.kwargs,
+-                action=argument.action,
+-                help=argument.help,
+-            )
++            # The _DoNothingAction is used to allow pre-processing of certain options
++            # without erroring when they are then processed again by argparse.
++            # Set metavar='' to suppress the metavar in help message.
++            if argument.action == _DoNothingAction:
++                section_group.add_argument(
++                    *argument.flags,
++                    **argument.kwargs,
++                    action=argument.action,
++                    metavar="",
++                    help=argument.help,
++                )
++            else:
++                section_group.add_argument(
++                    *argument.flags,
++                    **argument.kwargs,
++                    action=argument.action,
++                    help=argument.help,
++                )
+         elif isinstance(argument, _ExtendArgument):
+             section_group.add_argument(
+                 *argument.flags,
+diff --git a/pylint/config/utils.py b/pylint/config/utils.py
+index 8c790416..c0b862b4 100644
+--- a/pylint/config/utils.py
++++ b/pylint/config/utils.py
+@@ -207,6 +207,7 @@ PREPROCESSABLE_OPTIONS: dict[
+     "--output": (True, _set_output),
+     "--load-plugins": (True, _add_plugins),
+     "--verbose": (False, _set_verbose_mode),
++    "-v": (False, _set_verbose_mode),
+     "--enable-all-extensions": (False, _enable_all_extensions),
+ }
+ 
+@@ -218,7 +219,7 @@ def _preprocess_options(run: Run, args: Sequence[str]) -> list[str]:
+     i = 0
+     while i < len(args):
+         argument = args[i]
+-        if not argument.startswith("--"):
++        if not argument.startswith("-"):
+             processed_args.append(argument)
+             i += 1
+             continue

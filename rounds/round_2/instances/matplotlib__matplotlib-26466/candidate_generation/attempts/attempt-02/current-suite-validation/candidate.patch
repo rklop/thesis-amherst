@@ -1,0 +1,41 @@
+diff --git a/lib/matplotlib/text.py b/lib/matplotlib/text.py
+index d4922fc517..39fc8a89e3 100644
+--- a/lib/matplotlib/text.py
++++ b/lib/matplotlib/text.py
+@@ -1389,7 +1389,16 @@ class OffsetFrom:
+             The screen units to use (pixels or points) for the offset input.
+         """
+         self._artist = artist
+-        self._ref_coord = ref_coord
++        # Copy to avoid external mutations (see issue #26466).
++        # For numpy arrays, use .copy() directly. For other array-like objects,
++        # try iteration first, then fall back to np.asarray.
++        if isinstance(ref_coord, np.ndarray):
++            self._ref_coord = ref_coord.copy()
++        else:
++            try:
++                self._ref_coord = np.asarray(list(ref_coord)).copy()
++            except TypeError:
++                self._ref_coord = np.asarray(ref_coord).copy()
+         self.set_unit(unit)
+ 
+     def set_unit(self, unit):
+@@ -1456,7 +1465,17 @@ class _AnnotationBase:
+                  xycoords='data',
+                  annotation_clip=None):
+ 
+-        self.xy = xy
++        # Copy to avoid external mutations (see issue #26466).
++        # For numpy arrays, use .copy() directly. For other array-like objects,
++        # try iteration first (to preserve unit-aware duck arrays), then fall
++        # back to np.asarray for duck arrays with __array__ but no __iter__.
++        if isinstance(xy, np.ndarray):
++            self.xy = xy.copy()
++        else:
++            try:
++                self.xy = np.asarray(list(xy)).copy()
++            except TypeError:
++                self.xy = np.asarray(xy).copy()
+         self.xycoords = xycoords
+         self.set_annotation_clip(annotation_clip)
+ 

@@ -1,0 +1,29 @@
+diff --git a/django/db/migrations/serializer.py b/django/db/migrations/serializer.py
+index 27b5cbd379..d92b3bc3b3 100644
+--- a/django/db/migrations/serializer.py
++++ b/django/db/migrations/serializer.py
+@@ -120,9 +120,7 @@ class EnumSerializer(BaseSerializer):
+     def serialize(self):
+         enum_class = self.value.__class__
+         module = enum_class.__module__
+-        v_string, v_imports = serializer_factory(self.value.value).serialize()
+-        imports = {'import %s' % module, *v_imports}
+-        return "%s.%s(%s)" % (module, enum_class.__name__, v_string), imports
++        return "%s.%s[%r]" % (module, enum_class.__name__, self.value.name), {'import %s' % module}
+ 
+ 
+ class FloatSerializer(BaseSimpleSerializer):
+@@ -222,7 +220,12 @@ class RegexSerializer(BaseSerializer):
+         # Turn off default implicit flags (e.g. re.U) because regexes with the
+         # same implicit and explicit flags aren't equal.
+         flags = self.value.flags ^ re.compile('').flags
+-        regex_flags, flag_imports = serializer_factory(flags).serialize()
++        if flags:
++            # Use the name of the RegexFlag if available.
++            regex_flags = 're.RegexFlag[%r]' % flags.name
++            flag_imports = {'import re'}
++        else:
++            regex_flags, flag_imports = serializer_factory(flags).serialize()
+         imports = {'import re', *pattern_imports, *flag_imports}
+         args = [regex_pattern]
+         if flags:

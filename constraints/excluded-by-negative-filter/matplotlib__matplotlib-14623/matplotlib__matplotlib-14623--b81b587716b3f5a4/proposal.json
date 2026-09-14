@@ -1,0 +1,10 @@
+{
+  "test_name": "test_nonsingular_invalid_inverted_limits",
+  "specification_gap": "Preserving reversed logarithmic limits must not reinterpret a nonpositive second endpoint as a lower bound. For `(10, 0)`, zero remains an invalid upper endpoint and triggers the standard fallback range.",
+  "input_description": "Create a real logarithmic x-axis and call its public `LogLocator.nonsingular` method with reversed limits `(10, 0)`.",
+  "expected_output": "A `UserWarning` containing \u201cData has no positive values\u201d is emitted, and the returned limits are `(1, 10)`.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This zero-boundary case exercises the exact branch where candidate_a still reorders limits. Candidate_a instead treats zero as the lower endpoint, clips it, and emits no warning; candidate_b preserves endpoint roles and rejects the invalid range.",
+  "test_patch": "diff --git a/lib/matplotlib/tests/test_ticker.py b/lib/matplotlib/tests/test_ticker.py\n--- a/lib/matplotlib/tests/test_ticker.py\n+++ b/lib/matplotlib/tests/test_ticker.py\n@@ -202,6 +202,15 @@ class TestLogLocator(object):\n         loc = mticker.LogLocator(base=2)\n         test_value = np.array([0.5, 1., 2., 4., 8., 16., 32., 64., 128., 256.])\n         assert_almost_equal(loc.tick_values(1, 100), test_value)\n \n+    def test_nonsingular_invalid_inverted_limits(self):\n+        _, ax = plt.subplots()\n+        ax.set_xscale('log')\n+        locator = ax.xaxis.get_major_locator()\n+\n+        with pytest.warns(UserWarning, match=\"Data has no positive values\"):\n+            limits = locator.nonsingular(10, 0)\n+        assert limits == (1, 10)\n+\n     def test_switch_to_autolocator(self):\n         loc = mticker.LogLocator(subs=\"all\")\n         assert_array_equal(loc.tick_values(0.45, 0.55),\n",
+  "test_command": "cd /testbed && python -m pytest -q lib/matplotlib/tests/test_ticker.py::TestLogLocator::test_nonsingular_invalid_inverted_limits"
+}

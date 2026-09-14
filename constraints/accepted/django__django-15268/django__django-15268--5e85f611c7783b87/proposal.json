@@ -1,0 +1,10 @@
+{
+  "test_name": "test_alter_alter_unique_model_subclass",
+  "specification_gap": "A subclass of AlterUniqueTogether remains part of the same operation family, so a later subclass instance targeting the same model must supersede an earlier AlterUniqueTogether instance.",
+  "input_description": "Run MigrationOptimizer with two operations for Foo: AlterUniqueTogether setting unique_together to {('a', 'b')}, followed by a CustomAlterUniqueTogether subclass instance setting it to {('a', 'c')}.",
+  "expected_output": "The optimized sequence contains only the later CustomAlterUniqueTogether operation with {('a', 'c')}.",
+  "expected_passing_candidate": "candidate_b",
+  "why_interesting": "This exercises the exact subclass boundary where the patches disagree. candidate_a compares concrete classes and incorrectly treats the subclass as an independent together-option type, retaining both operations; candidate_b preserves normal isinstance semantics and collapses the superseded operation.",
+  "test_patch": "diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py\n--- a/tests/migrations/test_optimizer.py\n+++ b/tests/migrations/test_optimizer.py\n@@ -7,5 +7,9 @@\n from .models import EmptyManager, UnicodeModel\n \n \n+class CustomAlterUniqueTogether(migrations.AlterUniqueTogether):\n+    pass\n+\n+\n class OptimizerTests(SimpleTestCase):\n     \"\"\"\n@@ -203,7 +207,14 @@ class OptimizerTests(SimpleTestCase):\n     def test_alter_alter_unique_model(self):\n         self._test_alter_alter_model(\n             migrations.AlterUniqueTogether(\"Foo\", [[\"a\", \"b\"]]),\n             migrations.AlterUniqueTogether(\"Foo\", [[\"a\", \"c\"]]),\n         )\n \n+    def test_alter_alter_unique_model_subclass(self):\n+        subclass_operation = CustomAlterUniqueTogether(\"Foo\", [[\"a\", \"c\"]])\n+        self._test_alter_alter_model(\n+            migrations.AlterUniqueTogether(\"Foo\", [[\"a\", \"b\"]]),\n+            subclass_operation,\n+        )\n+\n     def test_alter_alter_index_model(self):\n",
+  "test_command": "./tests/runtests.py migrations.test_optimizer.OptimizerTests.test_alter_alter_unique_model_subclass"
+}

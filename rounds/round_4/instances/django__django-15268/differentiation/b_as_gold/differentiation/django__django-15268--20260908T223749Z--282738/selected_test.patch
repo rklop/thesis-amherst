@@ -1,0 +1,43 @@
+diff --git a/tests/migrations/test_optimizer.py b/tests/migrations/test_optimizer.py
+--- a/tests/migrations/test_optimizer.py
++++ b/tests/migrations/test_optimizer.py
+@@ -209,7 +209,37 @@ class OptimizerTests(SimpleTestCase):
+     def test_alter_alter_index_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterIndexTogether("Foo", [["a", "b"]]),
+             migrations.AlterIndexTogether("Foo", [["a", "c"]]),
+         )
+ 
++    def test_alter_together_reduction_uses_option_name(self):
++        """Operations for independent options must both be preserved."""
++        class AlterIndexTogetherSubclass(migrations.AlterUniqueTogether):
++            option_name = "index_together"
++
++            def __init__(self, name, index_together):
++                super().__init__(name, index_together)
++
++        optimized, _ = self.optimize(
++            [
++                migrations.AlterUniqueTogether(
++                    "Book", {("title",)},
++                ),
++                AlterIndexTogetherSubclass(
++                    "Book", {("author",)},
++                ),
++            ],
++            "migrations",
++        )
++        self.assertEqual(
++            [
++                (operation.option_name, operation.option_value)
++                for operation in optimized
++            ],
++            [
++                ("unique_together", {("title",)}),
++                ("index_together", {("author",)}),
++            ],
++        )
++
+     def test_alter_alter_owrt_model(self):
+         self._test_alter_alter_model(
+             migrations.AlterOrderWithRespectTo("Foo", "a"),

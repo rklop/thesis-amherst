@@ -1,0 +1,50 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "dbdb40f0b8c6a9fb93dbff45dfd563b600a4b81881b0d6c7e322107d1d3f5501",
+    "test_sha256": "da83445c4d8ed2765139ea5611cf53cbd64b77622de105772e36510e690eacae",
+    "test": {
+      "test_id": "django__django-11163--da83445c4d8ed276",
+      "test_name": "test_empty_fields_do_not_save_declared_many_to_many_field",
+      "specification_gap": "An empty ModelForm Meta.fields list means no model fields are selected for persistence, including many-to-many fields that are explicitly declared on the form and therefore appear in cleaned_data.",
+      "expected_output": "The item's persisted colour relation remains the original colour; the submitted replacement is not saved because colours isn't selected by Meta.fields.",
+      "test_patch": "diff --git a/tests/model_forms/tests.py b/tests/model_forms/tests.py\n--- a/tests/model_forms/tests.py\n+++ b/tests/model_forms/tests.py\n@@ -191,13 +191,39 @@ class ModelFormBaseTest(TestCase):\n     def test_empty_fields_on_modelform(self):\n         \"\"\"\n         No fields on a ModelForm should actually result in no fields.\n         \"\"\"\n         class EmptyPersonForm(forms.ModelForm):\n             class Meta:\n                 model = Person\n                 fields = ()\n \n         form = EmptyPersonForm()\n         self.assertEqual(len(form.fields), 0)\n \n+    def test_empty_fields_do_not_save_declared_many_to_many_field(self):\n+        \"\"\"\n+        ModelForm.save() doesn't save fields omitted by an empty Meta.fields.\n+        \"\"\"\n+        class EmptyItemForm(forms.ModelForm):\n+            colours = forms.ModelMultipleChoiceField(Colour.objects.all())\n+\n+            class Meta:\n+                model = ColourfulItem\n+                fields = []\n+\n+        old_colour = Colour.objects.create(name='Old')\n+        new_colour = Colour.objects.create(name='New')\n+        item = ColourfulItem.objects.create(name='Item')\n+        item.colours.add(old_colour)\n+\n+        form = EmptyItemForm(\n+            {'colours': [new_colour.pk]}, instance=item,\n+        )\n+        self.assertTrue(form.is_valid())\n+        form.save()\n+        self.assertEqual(\n+            list(item.colours.values_list('pk', flat=True)),\n+            [old_colour.pk],\n+        )\n+\n     def test_empty_fields_to_construct_instance(self):\n         \"\"\"\n         No fields should be set on a model instance if construct_instance receives fields=().\n",
+      "test_command": "cd /testbed && ./tests/runtests.py model_forms.tests.ModelFormBaseTest.test_empty_fields_do_not_save_declared_many_to_many_field",
+      "test_patch_sha256": "da83445c4d8ed2765139ea5611cf53cbd64b77622de105772e36510e690eacae",
+      "polarity": "must_fail",
+      "negative_specification": "A final patch is not required to fix _save_m2m() to prevent saving explicitly declared many-to-many fields when Meta.fields is an empty list.",
+      "expected_failure": {
+        "forbidden_substrings": [
+          "collected 0 items",
+          "no tests ran",
+          "ERROR collecting",
+          "command not found",
+          "No such file or directory",
+          "Could not find a version that satisfies the requirement",
+          "Temporary failure in name resolution"
+        ],
+        "kind": "behavioral_test_failure",
+        "reference_log_sha256": "fed0222f62764008e9a49a93cea2d3abb9c07575090044ebc7efd3144d12e9d0",
+        "reference_returncode": 1,
+        "required_any_substrings": [
+          "AssertionError",
+          "FAILED",
+          "FAIL:"
+        ],
+        "required_substrings": [
+          "test_empty_fields_do_not_save_declared_many_to_many_field"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 1,
+    "passed": false,
+    "test_ran": true,
+    "duration_seconds": 1.64,
+    "log_path": "test-004/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "django__django-11163--da83445c4d8ed276",
+  "polarity": "must_fail"
+}

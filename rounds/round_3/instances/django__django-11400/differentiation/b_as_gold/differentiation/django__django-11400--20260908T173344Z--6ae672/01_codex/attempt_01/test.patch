@@ -1,0 +1,42 @@
+diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py
+--- a/tests/model_fields/tests.py
++++ b/tests/model_fields/tests.py
+@@ -231,6 +231,38 @@ class GetChoicesOrderingTests(TestCase):
+     def assertChoicesEqual(self, choices, objs):
+         self.assertEqual(choices, [(obj.pk, str(obj)) for obj in objs])
+ 
++    def test_get_choices_model_ordering_uses_resolved_related_model(self):
++        """Fallback ordering comes from the model supplying the choices."""
++        class ResolvingRemoteField:
++            def __init__(self, remote_field):
++                self.remote_field = remote_field
++                self.model_accesses = 0
++
++            def __getattr__(self, name):
++                return getattr(self.remote_field, name)
++
++            @property
++            def model(self):
++                self.model_accesses += 1
++                return Foo if self.model_accesses == 1 else Bar
++
++        remote_field = self.field.remote_field
++        foo_ordering = Foo._meta.ordering
++        bar_ordering = Bar._meta.ordering
++        self.field.remote_field = ResolvingRemoteField(remote_field)
++        Foo._meta.ordering = ('-a',)
++        Bar._meta.ordering = ('a',)
++        try:
++            choices = self.field.get_choices(include_blank=False)
++        finally:
++            self.field.remote_field = remote_field
++            Foo._meta.ordering = foo_ordering
++            Bar._meta.ordering = bar_ordering
++        self.assertChoicesEqual(
++            choices,
++            [self.foo2, self.foo1]
++        )
++
+     def test_get_choices(self):
+         self.assertChoicesEqual(
+             self.field.get_choices(include_blank=False, ordering=('a',)),

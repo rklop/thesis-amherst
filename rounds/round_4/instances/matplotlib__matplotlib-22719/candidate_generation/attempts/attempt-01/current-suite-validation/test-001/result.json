@@ -1,0 +1,29 @@
+{
+  "fingerprint": {
+    "candidate_sha256": "41174439a80e0b3dfaad78ae2e0a18c2b17fdb0009029f5d63ce26f41e2363fd",
+    "test_sha256": "1348111cfbb6658f89320b79c4564678f932a72c850e751c53887c8433f70d7d",
+    "test": {
+      "test_id": "matplotlib__matplotlib-22719--1348111cfbb6658f",
+      "test_name": "test_empty_multidimensional_axis_conversion_skips_numeric_cast",
+      "specification_gap": "Empty categorical data contains no numeric values to cast. Axis conversion should short-circuit that operation while preserving the empty input's multidimensional shape in a float ndarray.",
+      "expected_output": "Conversion does not request object-to-float element casting and returns an ndarray with shape (0, 2) and float dtype.",
+      "test_patch": "diff --git a/lib/matplotlib/tests/test_category.py b/lib/matplotlib/tests/test_category.py\n--- a/lib/matplotlib/tests/test_category.py\n+++ b/lib/matplotlib/tests/test_category.py\n@@ -109,9 +109,32 @@ class TestStrCategoryConverter:\n     def test_convert_float_array(self):\n         data = np.array([1, 2, 3], dtype=float)\n         with pytest.warns(MatplotlibDeprecationWarning):\n             actual = self.cc.convert(data, self.unit, self.ax)\n         np.testing.assert_allclose(actual, np.array([1., 2., 3.]))\n \n+    def test_empty_multidimensional_axis_conversion_skips_numeric_cast(\n+            self, monkeypatch):\n+        fig, ax = plt.subplots()\n+        ax.xaxis.update_units([\"a\", \"b\"])\n+        data = np.empty((0, 2), dtype=object)\n+        real_asarray = np.asarray\n+\n+        def checked_asarray(value, *args, **kwargs):\n+            dtype = kwargs.get(\"dtype\", args[0] if args else None)\n+            if (isinstance(value, np.ndarray)\n+                    and value.size == 0\n+                    and value.dtype == object\n+                    and dtype is float):\n+                raise AssertionError(\n+                    \"empty categorical data must not be numerically cast\")\n+            return real_asarray(value, *args, **kwargs)\n+\n+        monkeypatch.setattr(np, \"asarray\", checked_asarray)\n+        actual = ax.convert_xunits(data)\n+\n+        assert actual.shape == (0, 2)\n+        assert actual.dtype == float\n+\n     @pytest.mark.parametrize(\"fvals\", fvalues, ids=fids)\n     def test_convert_fail(self, fvals):\n         with pytest.raises(TypeError):\n",
+      "test_command": "python -m pytest -q lib/matplotlib/tests/test_category.py::TestStrCategoryConverter::test_empty_multidimensional_axis_conversion_skips_numeric_cast",
+      "test_patch_sha256": "1348111cfbb6658f89320b79c4564678f932a72c850e751c53887c8433f70d7d",
+      "polarity": "must_pass",
+      "negative_specification": "",
+      "expected_failure": {}
+    }
+  },
+  "execution": {
+    "label": "submitted_candidate",
+    "returncode": 0,
+    "passed": true,
+    "test_ran": true,
+    "duration_seconds": 3.131,
+    "log_path": "test-001/submitted_candidate.log"
+  },
+  "outcome": "satisfied",
+  "test_id": "matplotlib__matplotlib-22719--1348111cfbb6658f",
+  "polarity": "must_pass"
+}

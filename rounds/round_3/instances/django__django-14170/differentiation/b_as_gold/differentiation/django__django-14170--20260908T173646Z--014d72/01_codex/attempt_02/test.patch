@@ -1,0 +1,37 @@
+diff --git a/tests/lookup/test_lookups.py b/tests/lookup/test_lookups.py
+--- a/tests/lookup/test_lookups.py
++++ b/tests/lookup/test_lookups.py
+@@ -1,9 +1,12 @@
+-from datetime import datetime
++from datetime import date, datetime
+ from unittest import mock
+ 
+-from django.db.models import DateTimeField, Value
+-from django.db.models.lookups import Lookup, YearLookup
++from django.db import connection
++from django.db.models import DateField, DateTimeField, Value
++from django.db.models.functions import ExtractIsoYear
++from django.db.models.lookups import IsoYearLookup, Lookup, YearLookup
+ from django.test import SimpleTestCase
+ 
+ 
+@@ -38,3 +41,19 @@ class YearLookupTests(SimpleTestCase):
+         msg = 'subclasses of YearLookup must provide a get_bound_params() method'
+         with self.assertRaisesMessage(NotImplementedError, msg):
+             look_up.get_bound_params(datetime(2010, 1, 1, 0, 0, 0), datetime(2010, 1, 1, 23, 59, 59))
++
++
++class IsoYearLookupTests(SimpleTestCase):
++    def test_iso_year_lookup_bounds_keyword(self):
++        lookup = IsoYearLookup(
++            lhs=ExtractIsoYear(Value(date(2020, 1, 1), output_field=DateField())),
++            rhs=2020,
++        )
++        expected = [
++            connection.ops.adapt_datefield_value(date(2019, 12, 30)),
++            connection.ops.adapt_datefield_value(date(2021, 1, 3)),
++        ]
++        self.assertEqual(
++            lookup.iso_year_lookup_bounds(connection, iso_year=2020),
++            expected,
++        )

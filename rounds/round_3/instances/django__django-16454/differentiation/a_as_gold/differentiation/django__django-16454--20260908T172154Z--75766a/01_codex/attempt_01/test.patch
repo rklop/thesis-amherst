@@ -1,0 +1,46 @@
+diff --git a/tests/user_commands/tests.py b/tests/user_commands/tests.py
+--- a/tests/user_commands/tests.py
++++ b/tests/user_commands/tests.py
+@@ -8,7 +8,12 @@ from admin_scripts.tests import AdminScriptTestCase
+ 
+ from django.apps import apps
+ from django.core import management
+-from django.core.management import BaseCommand, CommandError, find_commands
++from django.core.management import (
++    BaseCommand,
++    CommandError,
++    CommandParser,
++    find_commands,
++)
+ from django.core.checks import Tags
+ from django.core.management.utils import (
+     find_command,
+@@ -406,6 +411,24 @@ class CommandTests(SimpleTestCase):
+         with self.assertRaisesMessage(CommandError, msg):
+             management.call_command("subparser_dest", subcommand="foo", bar=12)
+ 
++    def test_subparser_inherits_called_from_command_line_none(self):
++        class CommandLineDefaultParser(CommandParser):
++            def __init__(
++                self, *, called_from_command_line=True, **kwargs
++            ):
++                super().__init__(
++                    called_from_command_line=called_from_command_line,
++                    **kwargs,
++                )
++
++        parser = CommandParser(
++            prog="manage.py command", called_from_command_line=None
++        )
++        subparsers = parser.add_subparsers(
++            parser_class=CommandLineDefaultParser
++        )
++        create = subparsers.add_parser("create")
++        create.add_argument("name")
++        msg = "Error: the following arguments are required: name"
++        with self.assertRaisesMessage(CommandError, msg):
++            parser.parse_args(["create"])
++
+     def test_create_parser_kwargs(self):
+         """BaseCommand.create_parser() passes kwargs to CommandParser."""
+         epilog = "some epilog text"

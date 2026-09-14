@@ -1,0 +1,10 @@
+{
+  "test_name": "test_get_choices_falls_back_to_falsy_meta_ordering",
+  "specification_gap": "When Field.get_choices() receives no explicit ordering, a nonempty tuple subtype accepted by Meta.ordering must govern the choice order even if it defines a false truth value. The fallback ordering must not be discarded by a second truthiness normalization.",
+  "input_description": "Temporarily set the related Foo model's Meta.ordering to a tuple subtype containing '-a' whose __bool__() returns False, then call the public ForeignKey Field.get_choices() API without an ordering argument.",
+  "expected_output": "The choices are ordered by Foo.a descending: the Foo with a='b' appears before the Foo with a='a'.",
+  "expected_passing_candidate": "candidate_a",
+  "why_interesting": "This exercises the lower-level public choice API added by the supplied solution and an accepted tuple type variant. candidate_a forwards the selected fallback iterable to order_by(), while candidate_b's additional `or ()` discards it and returns the rows without the requested descending order.",
+  "test_patch": "diff --git a/tests/model_fields/tests.py b/tests/model_fields/tests.py\n--- a/tests/model_fields/tests.py\n+++ b/tests/model_fields/tests.py\n@@ -240,6 +240,19 @@ class GetChoicesOrderingTests(TestCase):\n             self.field.get_choices(include_blank=False, ordering=('-a',)),\n             [self.foo2, self.foo1]\n         )\n+\n+    def test_get_choices_falls_back_to_falsy_meta_ordering(self):\n+        class FalsyOrdering(tuple):\n+            def __bool__(self):\n+                return False\n+\n+        original_ordering = Foo._meta.ordering\n+        Foo._meta.ordering = FalsyOrdering(('-a',))\n+        try:\n+            choices = self.field.get_choices(include_blank=False)\n+        finally:\n+            Foo._meta.ordering = original_ordering\n+        self.assertChoicesEqual(choices, [self.foo2, self.foo1])\n \n     def test_get_choices_reverse_related_field(self):\n         self.assertChoicesEqual(\n",
+  "test_command": "python tests/runtests.py model_fields.GetChoicesOrderingTests.test_get_choices_falls_back_to_falsy_meta_ordering"
+}

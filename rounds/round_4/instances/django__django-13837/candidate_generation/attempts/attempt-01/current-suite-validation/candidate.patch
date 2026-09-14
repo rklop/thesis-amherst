@@ -1,0 +1,30 @@
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index b8efb9f881..d53acade87 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -217,12 +217,23 @@ def get_child_arguments():
+     on reloading.
+     """
+     import django.__main__
+-    django_main_path = Path(django.__main__.__file__)
++    try:
++        django_main_path = Path(django.__main__.__file__)
++    except AttributeError:
++        django_main_path = None
+     py_script = Path(sys.argv[0])
+ 
+     args = [sys.executable] + ['-W%s' % o for o in sys.warnoptions]
+-    if py_script == django_main_path:
++    # Check if Python was launched with -m using __main__.__spec__.parent.
++    # See https://docs.python.org/3/reference/import.html#main-spec
++    main_spec = getattr(sys.modules['__main__'], '__spec__', None)
++    if main_spec is not None and main_spec.parent:
++        # The server was started with `python -m package runserver`.
++        args += ['-m', main_spec.parent]
++        args += sys.argv[1:]
++    elif main_spec is None and django_main_path is not None and py_script == django_main_path:
+         # The server was started with `python -m django runserver`.
++        # This fallback handles cases where __main__.__spec__ is not available.
+         args += ['-m', 'django']
+         args += sys.argv[1:]
+     elif not py_script.exists():

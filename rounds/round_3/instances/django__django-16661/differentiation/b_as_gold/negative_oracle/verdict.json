@@ -1,0 +1,25 @@
+{
+  "decision": "reject",
+  "confidence": 0.85,
+  "negative_specification": "A ForeignKey lookup that targets a non-relational field (IntegerField with empty path_infos) must be allowed without listing it in list_filter, because the value is already available locally through the ForeignKey column.",
+  "forbidden_behavior": "Treating a scalar field with a path_infos attribute (but not marked is_relation) as requiring a separate relation traversal.",
+  "gold_failure_interpretation": "The gold patch implements a different fix for the original issue (OneToOneField as primary_key) that involves checking model._meta.parents and auto_field rather than field.is_relation. The gold's logic permits lookups on non-relational targets when they represent local values (like employee__department__id), but the specific condition in the gold fails this test case because the test's CustomPrimaryKeyField with empty path_infos doesn't fit the exact criteria the gold checks for (it's not in model._meta.parents, not the auto_field, but also not in to_fields as the gold expects).",
+  "specification_value": "This test validates that field.is_relation should be the discriminator for whether a lookup requires list_filter permission, distinguishing semantic relationality from structural attribute presence.",
+  "decision_rationale": "While the test passes candidate_b and fails candidate_a (correctly separating them), the gold patch fails this test. The gold patch implements a solution to the original issue (OneToOneField as pk) using different logic that doesn't recognize the test's custom field pattern. The test's core premise (is_relation check) is not what the gold implements - the gold uses model._meta.parents and auto_field checks. This indicates the test captures a behavior candidate_b happens to implement but that the gold doesn't, making it an unreliable negative constraint for the actual bug being fixed. The test would require the gold to add field.is_relation logic, which it does not.",
+  "concerns": [
+    "The gold patch uses model._meta.parents and auto_field checks, not field.is_relation",
+    "The test uses a custom field pattern (empty path_infos) that the gold never encounters",
+    "The original issue concerns OneToOneField as primary_key, not custom IntegerField",
+    "Failing the gold doesn't prove the gold's solution is wrong - it proves the test is narrower than the issue",
+    "The test conflates two distinct behaviors: (1) OneToOneField-as-PK handling and (2) non-relational field detection"
+  ],
+  "human_review_questions": [
+    "Is the test's custom field pattern (IntegerField with path_infos=()) a valid extension point that should be preserved?",
+    "Does the gold's solution (checking parents and auto_field) implicitly handle the is_relation concern differently?",
+    "Should a negative constraint about OneToOneField-as-PK also cover arbitrary custom non-relational fields with path_infos?"
+  ],
+  "model": "minimax/MiniMax-M2.5",
+  "attempt": 1,
+  "duration_seconds": 19.215,
+  "confidence_affects_admission": false
+}

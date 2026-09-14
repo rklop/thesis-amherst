@@ -1,0 +1,39 @@
+diff --git a/sympy/physics/units/tests/test_issue_24066.py b/sympy/physics/units/tests/test_issue_24066.py
+new file mode 100644
+index 0000000000..ef435a4ec4
+--- /dev/null
++++ b/sympy/physics/units/tests/test_issue_24066.py
+@@ -0,0 +1,32 @@
++from sympy.core.function import Function
++from sympy.core.numbers import Integer
++from sympy.physics.units import Dimension, Quantity
++from sympy.physics.units.systems.si import SI
++import sympy.physics.units.unitsystem as unitsystem
++
++
++def test_dimensionless_function_dimension_is_fixed_before_factor_rebuild(
++        monkeypatch):
++    dimension_was_normalized = []
++
++    class RecordingDimension(Dimension):
++        def __new__(cls, name, symbol=None):
++            dimension_was_normalized.append(True)
++            return super().__new__(cls, name, symbol)
++
++    class DimensionSensitiveFunction(Function):
++        @classmethod
++        def eval(cls, arg):
++            if dimension_was_normalized:
++                return Integer(17)
++            return Integer(23)
++
++    quantity = Quantity('issue_24066_dimensionless_quantity')
++    SI.set_quantity_dimension(quantity, Dimension(1))
++    SI.set_quantity_scale_factor(quantity, 1)
++    expr = DimensionSensitiveFunction(quantity, evaluate=False)
++
++    monkeypatch.setattr(unitsystem, 'Dimension', RecordingDimension)
++    factor, dimension = SI._collect_factor_and_dimension(expr)
++
++    assert factor == 17
++    assert SI.get_dimension_system().is_dimensionless(dimension)

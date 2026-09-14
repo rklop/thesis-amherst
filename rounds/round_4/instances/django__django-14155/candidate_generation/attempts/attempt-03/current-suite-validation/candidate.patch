@@ -1,0 +1,43 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index 9b00e24509..3c88afd226 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -45,7 +45,26 @@ class ResolverMatch:
+         self.namespaces = [x for x in namespaces if x] if namespaces else []
+         self.namespace = ':'.join(self.namespaces)
+ 
+-        if not hasattr(func, '__name__'):
++        # Handle functools.partial objects specially to show the underlying
++        # function and its arguments in __repr__.
++        if isinstance(func, functools.partial):
++            # Use repr() to get the function representation (e.g., <function empty_view at 0x...>)
++            func_repr = repr(func.func)
++            # Build the func_path to show it's a partial with underlying func and args
++            args_str = ', '.join(
++                repr(arg) for arg in func.args
++            )
++            kwargs_str = ', '.join(
++                f'{key}={repr(value)}' for key, value in func.keywords.items()
++            )
++            if args_str and kwargs_str:
++                partial_args = f'{args_str}, {kwargs_str}'
++            elif args_str:
++                partial_args = args_str
++            else:
++                partial_args = kwargs_str
++            self._func_path = f'functools.partial({func_repr}, {partial_args})'
++        elif not hasattr(func, '__name__'):
+             # A class-based view
+             self._func_path = func.__class__.__module__ + '.' + func.__class__.__name__
+         else:
+@@ -60,8 +79,8 @@ class ResolverMatch:
+ 
+     def __repr__(self):
+         return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%s, app_names=%s, namespaces=%s, route=%s)" % (
+-            self._func_path, self.args, self.kwargs, self.url_name,
+-            self.app_names, self.namespaces, self.route,
++            self._func_path, self.args, self.kwargs, repr(self.url_name),
++            self.app_names, self.namespaces, repr(self.route),
+         )
+ 
+ 

@@ -1,0 +1,44 @@
+diff --git a/lib/matplotlib/offsetbox.py b/lib/matplotlib/offsetbox.py
+index 1dee8a23d9..67f33b4e76 100644
+--- a/lib/matplotlib/offsetbox.py
++++ b/lib/matplotlib/offsetbox.py
+@@ -1514,6 +1514,39 @@ class DraggableBase:
+                 'button_release_event', self.on_release),
+         ]
+ 
++    def __getstate__(self):
++        state = self.__dict__.copy()
++        # We cannot pickle the canvas, nor any callback IDs, so we just
++        # remove them.  On unpickle we re-connect them.
++        state.pop('_canvas', None)
++        state.pop('cids', None)
++        state.pop('_c1', None)
++        state.pop('background', None)
++        return state
++
++    def __setstate__(self, state):
++        self.__dict__.update(state)
++        # We don't reconnect the canvas here because the ref_artist may not be
++        # attached to a figure yet. Instead, we reconnect lazily when the canvas
++        # is first accessed via the canvas property.
++
++    @property
++    def canvas(self):
++        # Lazily reconnect to the canvas when accessed
++        if not hasattr(self, '_canvas') or self._canvas is None:
++            self._canvas = self.ref_artist.figure.canvas
++            self.cids = [
++                self._canvas.callbacks._connect_picklable(
++                    'pick_event', self.on_pick),
++                self._canvas.callbacks._connect_picklable(
++                    'button_release_event', self.on_release),
++            ]
++        return self._canvas
++
++    @canvas.setter
++    def canvas(self, value):
++        self._canvas = value
++
+     def on_motion(self, evt):
+         if self._check_still_parented() and self.got_artist:
+             dx = evt.x - self.mouse_x

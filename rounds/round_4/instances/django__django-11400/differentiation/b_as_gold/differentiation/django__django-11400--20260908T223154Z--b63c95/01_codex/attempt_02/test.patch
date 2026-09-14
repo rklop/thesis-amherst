@@ -1,0 +1,35 @@
+diff --git a/tests/admin_filters/tests.py b/tests/admin_filters/tests.py
+--- a/tests/admin_filters/tests.py
++++ b/tests/admin_filters/tests.py
+@@ -573,6 +573,31 @@ class ListFiltersTests(TestCase):
+         expected = [(self.jack.pk, 'Jack Red'), (self.john.pk, 'John Blue')]
+         self.assertEqual(filterspec.lookup_choices, expected)
+ 
++    def test_relatedfieldlistfilter_empty_ordering_uses_model_ordering(self):
++        """An empty ModelAdmin ordering falls back to Meta.ordering."""
++        original_ordering = Employee._meta.ordering
++        self.addCleanup(setattr, Employee._meta, 'ordering', original_ordering)
++        Employee._meta.ordering = ('name',)
++
++        class EmployeeAdminWithoutOrdering(ModelAdmin):
++
++            def get_ordering(self, request):
++                return []
++
++        class BookAdmin(ModelAdmin):
++            list_filter = ('employee',)
++
++        site.register(Employee, EmployeeAdminWithoutOrdering)
++        self.addCleanup(lambda: site.unregister(Employee))
++        modeladmin = BookAdmin(Book, site)
++
++        request = self.request_factory.get('/')
++        request.user = self.alfred
++        changelist = modeladmin.get_changelist_instance(request)
++        filterspec = changelist.get_filters(request)[0][0]
++        expected = [(self.jack.pk, 'Jack Red'), (self.john.pk, 'John Blue')]
++        self.assertEqual(filterspec.lookup_choices, expected)
++
+     def test_relatedfieldlistfilter_foreignkey_ordering_reverse(self):
+         class EmployeeAdminWithOrdering(ModelAdmin):
+             ordering = ('-name',)

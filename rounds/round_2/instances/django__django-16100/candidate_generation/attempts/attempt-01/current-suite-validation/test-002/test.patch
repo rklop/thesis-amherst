@@ -1,0 +1,37 @@
+diff --git a/tests/admin_views/tests.py b/tests/admin_views/tests.py
+--- a/tests/admin_views/tests.py
++++ b/tests/admin_views/tests.py
+@@ -4045,6 +4045,31 @@ class AdminViewListEditable(TestCase):
+         response = self.client.post(
+             reverse("admin:admin_views_person_changelist"), data, follow=True
+         )
+         self.assertEqual(len(response.context["messages"]), 1)
+ 
++    def test_list_editable_message_failure_after_commit(self):
++        """A failure reporting success doesn't roll back completed list edits."""
++        data = {
++            "form-TOTAL_FORMS": "1",
++            "form-INITIAL_FORMS": "1",
++            "form-MAX_NUM_FORMS": "0",
++            "form-0-id": str(self.per1.pk),
++            "form-0-gender": "2",
++            "form-0-alive": "checked",
++            "_save": "Save",
++        }
++        model_admin = site._registry[Person]
++        with mock.patch.object(
++            model_admin,
++            "message_user",
++            side_effect=RuntimeError("message backend failed"),
++        ):
++            with self.assertRaisesMessage(RuntimeError, "message backend failed"):
++                self.client.post(
++                    reverse("admin:admin_views_person_changelist"), data
++                )
++
++        self.per1.refresh_from_db()
++        self.assertEqual(self.per1.gender, 2)
++
+     def test_post_submission(self):
+         data = {
+             "form-TOTAL_FORMS": "3",
